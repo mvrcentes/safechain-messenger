@@ -13,8 +13,9 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 
-import { login as loginUser } from "@/api/auth/auth"
+import { loginUser } from "@/api/auth/auth"
 import { saveToken } from "../utils/utils"
 
 const formSchema = z.object({
@@ -42,8 +43,10 @@ const Login = () => {
       console.log("✅ Logged in:", response)
       // Redirige al home
       navigate("/")
+      toast.success("Login successful!")
     } catch (error) {
       console.error("❌ Login error:", error)
+      toast.error("Login failed. Please try again.")
     }
   }
   return (

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken"
 import prisma from "../../database.js"
 
 const JWT_SECRET = process.env.JWT_SECRET
+const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "1h"
 
 export const register = async (req, res) => {
   const { name, email, password } = req.body
@@ -48,15 +49,11 @@ export const login = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "User not found" })
 
-    if (password !== user.passwordHash) {
-      return res.status(401).json({ error: "Incorrect password" })
-    }
-
     const valid = await argon2.verify(user.passwordHash, password)
     if (!valid) return res.status(401).json({ error: "Incorrect password" })
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: JWT_EXPIRATION,
     })
 
     res.json({ token })

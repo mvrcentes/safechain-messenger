@@ -8,7 +8,7 @@ import {
   CardContent,
   CardFooter,
 } from "@/components/ui/card"
-// import Login from "@/pages/Login"
+import Login from "@/pages/Login"
 import Register from "@/pages/Register"
 
 const Auth = () => {
@@ -29,7 +29,9 @@ const Auth = () => {
                 Inicia sesión con tu cuenta existente.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">{/* <Login /> */}</CardContent>
+            <CardContent className="space-y-4">
+              <Login />
+            </CardContent>
           </Card>
         </TabsContent>
 
