@@ -1,5 +1,6 @@
 import cors from "cors"
 import express from "express"
+import authRoutes from "./routes/auth.routes.js"
 
 const app = express()
 
@@ -12,5 +13,6 @@ app.set("port", process.env.PORT || 5000)
 
 app.use(cors(corsOptions))
 app.use(express.json())
+app.use("/api/auth", authRoutes)
 
 export default app

@@ -1,21 +1,15 @@
-import pkg from "pg"
-const { Pool } = pkg
+// src/lib/prisma.js
+import { PrismaClient } from "@prisma/client"
 
-const pool = new Pool({
-  user: process.env.DB_USER,
-  host: process.env.DB_HOST,
-  database: process.env.DB_NAME,
-  password: process.env.DB_PASSWORD,
-  port: parseInt(process.env.DB_PORT, 10),
-})
+const prisma = new PrismaClient()
 
-pool
-  .connect()
+prisma
+  .$connect()
   .then(() => {
-    console.log("Connected to the database")
+    console.log("✅ Connected to the database (Prisma)")
   })
   .catch((err) => {
-    console.error("Error connecting to the database", err)
+    console.error("❌ Error connecting to the database (Prisma)", err)
   })
 
-export default pool
+export default prisma
