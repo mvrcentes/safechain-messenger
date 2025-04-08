@@ -46,7 +46,15 @@ const Login = () => {
       toast.success("Login successful!")
     } catch (error) {
       console.error("❌ Login error:", error)
-      toast.error("Login failed. Please try again.")
+      const message = error.response?.data?.error
+
+      if (message === "User not found") {
+        toast.error("❌ Email not registered")
+      } else if (message === "Incorrect password") {
+        toast.error("❌ Incorrect password")
+      } else {
+        toast.error("Login failed. Please try again.")
+      }
     }
   }
   return (
