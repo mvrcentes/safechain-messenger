@@ -1,5 +1,5 @@
 import axios from "axios"
-import { saveToken, getToken } from "@/utils/utils"
+import { saveToken, getToken, isLoggingOut } from "@/utils/utils"
 
 const instance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -16,7 +16,11 @@ instance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !isLoggingOut // 👈 no intentes refresh si estamos saliendo
+    ) {
       originalRequest._retry = true
 
       try {
@@ -36,5 +40,7 @@ instance.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+console.log("🔍 Axios Base URL:", import.meta.env.VITE_API_URL)
 
 export default instance

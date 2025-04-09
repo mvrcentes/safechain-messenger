@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Card,
@@ -12,9 +12,16 @@ import Login from "@/pages/Login"
 import Register from "@/pages/Register"
 
 const Auth = () => {
+  const [tab, setTab] = useState("login")
+  const [prefilledEmail, setPrefilledEmail] = useState("")
+  const handleRegistered = (email) => {
+    setPrefilledEmail(email)
+    setTab("login")
+  }
+
   return (
     <div className="flex justify-center items-center min-h-screen min-w-screen">
-      <Tabs defaultValue="login" className="w-[400px] space-y-4 ">
+      <Tabs value={tab} onValueChange={setTab} className="w-[400px] space-y-4 ">
         <TabsList className="grid w-full grid-cols-2 gap-2 bg-muted p-1 rounded-md">
           <TabsTrigger value="login">Login</TabsTrigger>
 
@@ -30,7 +37,7 @@ const Auth = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Login />
+              <Login prefilledEmail={prefilledEmail} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -44,7 +51,7 @@ const Auth = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Register />
+              <Register onRegistered={handleRegistered} />
             </CardContent>
           </Card>
         </TabsContent>

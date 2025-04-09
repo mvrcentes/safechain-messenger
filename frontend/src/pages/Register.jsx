@@ -30,7 +30,7 @@ const formSchema = z
     path: ["passwordConfirmation"],
   })
 
-const Register = () => {
+const Register = ({ onRegistered }) => {
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,6 +47,7 @@ const Register = () => {
       const response = await register(name, email, password)
       console.log("✅ Registered user:", response)
       toast.success("Registration successful")
+      onRegistered?.(email)
     } catch (error) {
       console.error("❌ Registration error:", error)
       if (error.response && error.response.status === 409) {

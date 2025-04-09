@@ -25,11 +25,17 @@ export const loginUser = async (email, password) => {
   try {
     const hashedPassword = await hashPassword(password)
 
-    const response = await axios.post(`${API_URL}/login`, {
-      email,
-      password: hashedPassword,
-    })
-    return response.data
+    const response = await axios.post(
+      `${API_URL}/login`,
+      {
+        email,
+        password: hashedPassword,
+      },
+      {
+        withCredentials: true,
+      }
+    )
+    return response
   } catch (error) {
     console.error("Error during login:", error)
     throw error

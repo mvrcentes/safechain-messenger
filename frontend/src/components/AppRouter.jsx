@@ -2,7 +2,8 @@ import React from "react"
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import Auth from "@/app/pages/Auth"
 import ProtectedRoute from "./ProtectedRoutes.jsx"
-import Register from "@/pages/Register"
+
+import Message from "../app/pages/Message.jsx"
 
 const AppRouter = () => {
   return (
@@ -13,9 +14,7 @@ const AppRouter = () => {
           path="/"
           element={
             <ProtectedRoute>
-              <div>
-                Home
-              </div>
+              <Message />
             </ProtectedRoute>
           }
         />

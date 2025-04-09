@@ -23,14 +23,14 @@ const formSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 })
 
-const Login = () => {
+const Login = ({ prefilledEmail = "" }) => {
   const navigate = useNavigate()
 
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: "",
-      password: "",
+      email: prefilledEmail || "test@test.com",
+      password: "12345678",
     },
   })
 
@@ -39,7 +39,13 @@ const Login = () => {
       const { email, password } = data
       const response = await loginUser(email, password)
 
-      saveToken(response.token)
+      const cookies = document.cookie
+      console.log(response.headers)
+      console.log("Cookies:", cookies)
+
+      console.log({response})
+
+      saveToken(response.data.token)
       console.log("✅ Logged in:", response)
       // Redirige al home
       navigate("/")

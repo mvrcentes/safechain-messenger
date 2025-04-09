@@ -1,4 +1,5 @@
 import argon2 from "argon2"
+import { serialize } from "cookie"
 import dayjs from "dayjs"
 import jwt from "jsonwebtoken"
 import { v4 as uuidv4 } from "uuid"
@@ -36,9 +37,31 @@ export const register = async (req, res) => {
   }
 }
 
+export const logout = async (req, res) => {
+  const token = req.cookies.refreshToken
+
+  if (!token) {
+    return res.status(200).json({ message: "No session to clear" })
+  }
+
+  // Remove session from DB
+  try {
+    await prisma.session.deleteMany({ where: { token } })
+  } catch (error) {
+    console.error("Error deleting session:", error)
+  }
+
+  // Force cookie removal with expiration
+  res.setHeader(
+    "Set-Cookie",
+    "refreshToken=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax"
+  )
+
+  res.status(200).json({ message: "Logged out" })
+}
+
 export const login = async (req, res) => {
   const { email, password } = req.body
-
   try {
     const user = await prisma.user.findUnique({
       where: { email },
@@ -59,7 +82,7 @@ export const login = async (req, res) => {
       { id: user.id, email: user.email },
       JWT_SECRET,
       {
-        expiresIn: "15m",
+        expiresIn: JWT_EXPIRATION,
       }
     )
 
@@ -74,12 +97,15 @@ export const login = async (req, res) => {
       },
     })
 
-    res.cookie("refreshToken", refreshToken, {
+    const serialized = serialize("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
+      secure: false,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60, // en segundos
     })
+
+    res.setHeader("Set-Cookie", serialized)
 
     res.json({ token: accessToken })
   } catch (err) {

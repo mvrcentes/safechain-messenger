@@ -14,9 +14,9 @@ const ProtectedRoute = ({ children }) => {
         setChecking(false)
       } else {
         try {
-          const res = await axios.post("/auth/refresh", {}, { withCredentials: true })
-          const newToken = res.data.token
-          saveToken(newToken)
+          const res = await axios.get("/auth/refresh")
+          const data = res.data
+          saveToken(data.token)
           setAuth(true)
         } catch (err) {
           console.error("❌ Refresh failed:", err)

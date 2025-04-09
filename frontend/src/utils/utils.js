@@ -1,4 +1,5 @@
 import { jwtDecode } from "jwt-decode"
+import axios from "@/lib/axios"
 
 export const saveToken = (token) => {
   localStorage.setItem("token", token)
@@ -21,6 +22,19 @@ export const isAuthenticated = () => {
   }
 }
 
-export const logout = () => {
-  localStorage.removeItem("token")
+export let isLoggingOut = false
+export const setLoggingOut = (value) => {
+  isLoggingOut = value
+}
+
+export const logout = async () => {
+  try {
+    setLoggingOut(true) 
+    await axios.post("/auth/logout")
+  } catch (err) {
+    console.error("❌ Error during logout:", err)
+  } finally {
+    localStorage.removeItem("token")
+    setLoggingOut(false)
+  }
 }
