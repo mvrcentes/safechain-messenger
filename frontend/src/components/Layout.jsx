@@ -48,10 +48,17 @@ const Layout = ({ children }) => {
             </div>
             <Button
               variant="ghost"
+              className="w-full justify-start"
+              onClick={() => (window.location.href = "/settings")}
+            >
+              Settings
+            </Button>
+            <Button
+              variant="ghost"
               className="text-destructive w-full justify-start"
-              onClick={() => {
-                logout()
-                window.location.reload()
+              onClick={async () => {
+                await logout()
+                window.location.href = "/auth"
               }}>
               Log out
             </Button>

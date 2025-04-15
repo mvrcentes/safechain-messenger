@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useState } from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -14,9 +14,15 @@ import {
 import { Input } from "@/components/ui/input"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp"
+import { saveToken } from "@/utils/utils"
 
-import { loginUser } from "@/api/auth/auth"
-import { saveToken } from "../utils/utils"
+import { loginUser, loginWithMFA } from "@/api/auth/auth"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -24,6 +30,9 @@ const formSchema = z.object({
 })
 
 const Login = ({ prefilledEmail = "" }) => {
+  const [mfaStage, setMfaStage] = useState(false)
+  const [mfaCode, setMfaCode] = useState("")
+  const [mfaEmail, setMfaEmail] = useState("")
   const navigate = useNavigate()
 
   const form = useForm({
@@ -39,11 +48,18 @@ const Login = ({ prefilledEmail = "" }) => {
       const { email, password } = data
       const response = await loginUser(email, password)
 
+      if (response.status === 206 && response.data.mfaRequired) {
+        setMfaStage(true)
+        setMfaEmail(email)
+        toast("MFA required. Please enter your code.")
+        return
+      }
+
       const cookies = document.cookie
       console.log(response.headers)
       console.log("Cookies:", cookies)
 
-      console.log({response})
+      console.log({ response })
 
       saveToken(response.data.token)
       console.log("✅ Logged in:", response)
@@ -63,6 +79,17 @@ const Login = ({ prefilledEmail = "" }) => {
       }
     }
   }
+  const handleMFAVerify = async () => {
+    try {
+      const response = await loginWithMFA(mfaEmail, mfaCode)
+      saveToken(response.data.token)
+      navigate("/")
+      toast.success("✅ MFA login successful!")
+    } catch (error) {
+      toast.error("❌ Invalid MFA code: " + error.response?.data?.error)
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -98,6 +125,30 @@ const Login = ({ prefilledEmail = "" }) => {
           Login
         </Button>
       </form>
+      {mfaStage && (
+        <div className="space-y-4 pt-6">
+          <h3 className="text-lg font-medium">Enter MFA Code</h3>
+          <InputOTP maxLength={6} value={mfaCode} onChange={setMfaCode}>
+            <InputOTPGroup>
+              <InputOTPSlot index={0} />
+              <InputOTPSlot index={1} />
+              <InputOTPSlot index={2} />
+            </InputOTPGroup>
+            <InputOTPSeparator />
+            <InputOTPGroup>
+              <InputOTPSlot index={3} />
+              <InputOTPSlot index={4} />
+              <InputOTPSlot index={5} />
+            </InputOTPGroup>
+          </InputOTP>
+          <Button
+            type="button"
+            onClick={handleMFAVerify}
+            disabled={mfaCode.length !== 6}>
+            Verify MFA
+          </Button>
+        </div>
+      )}
     </Form>
   )
 }

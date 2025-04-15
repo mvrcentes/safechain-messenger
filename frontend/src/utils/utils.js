@@ -38,3 +38,13 @@ export const logout = async () => {
     setLoggingOut(false)
   }
 }
+
+export const getTokenPayload = () => {
+  const token = localStorage.getItem("token")
+  if (!token) return null
+  try {
+    return jwtDecode(token)
+  } catch {
+    return null
+  }
+}

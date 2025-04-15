@@ -1,4 +1,4 @@
-import axios from "axios"
+import axios from "@/lib/axios"
 
 import { hashPassword } from "@/lib/crypto"
 
@@ -38,6 +38,20 @@ export const loginUser = async (email, password) => {
     return response
   } catch (error) {
     console.error("Error during login:", error)
+    throw error
+  }
+}
+
+export const loginWithMFA = async (email, token) => {
+  try {
+    const response = await axios.post(
+      `${API_URL}/login/mfa`,
+      { email, token },
+      { withCredentials: true }
+    )
+    return response
+  } catch (error) {
+    console.error("Error during MFA login:", error)
     throw error
   }
 }
