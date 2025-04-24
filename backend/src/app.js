@@ -4,6 +4,7 @@ import express from "express"
 
 import authRoutes from "./routes/auth.routes.js"
 import mfaRoutes from "./routes/mfa.routes.js"
+import userRoutes from "./routes/user.routes.js"
 
 const app = express()
 
@@ -19,5 +20,6 @@ app.use(cookieParser())
 app.use(express.json())
 app.use("/api/auth", authRoutes)
 app.use("/api/auth/mfa", mfaRoutes)
+app.use("/api/user", userRoutes)
 
 export default app

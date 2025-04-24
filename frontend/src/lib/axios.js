@@ -16,20 +16,16 @@ instance.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
-    if (isLoggingOut()) {
+    if (isLoggingOut) {
       return Promise.reject(error)
     }
 
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
-    ) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
 
       try {
         const res = await axios.get(
           import.meta.env.VITE_API_URL + "/auth/refresh",
-          {},
           { withCredentials: true }
         )
         const newToken = res.data.token
