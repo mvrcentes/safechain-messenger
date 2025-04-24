@@ -15,7 +15,7 @@ export function getUserIdFromToken() {
 
 export function connectToSocket(onIncomingMessage) {
   const userId = getUserIdFromToken()
-  if (!userId) return
+  if (!userId || socket?.readyState === WebSocket.OPEN) return
 
   socket = new WebSocket("ws://localhost:4000")
 
@@ -26,7 +26,10 @@ export function connectToSocket(onIncomingMessage) {
 
   socket.addEventListener("message", (event) => {
     const data = JSON.parse(event.data)
-    if (data.type === "message" && typeof onIncomingMessage === "function") {
+    if (
+      typeof onIncomingMessage === "function" &&
+      (data.type === "message" || data.type === "group-message")
+    ) {
       onIncomingMessage(data)
     }
   })
@@ -36,7 +39,9 @@ export function connectToSocket(onIncomingMessage) {
   })
 
   socket.addEventListener("close", () => {
-    console.log("🔌 WebSocket disconnected")
+    console.warn("🔌 WebSocket closed. Attempting reconnect in 2s...")
+    socket = null
+    setTimeout(() => connectToSocket(onIncomingMessage), 2000)
   })
 }
 
@@ -48,6 +53,20 @@ export function sendMessage(to, content) {
         type: "message",
         from: userId,
         to,
+        content,
+      })
+    )
+  }
+}
+
+export function sendGroupSocketMessage(groupId, content) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    const userId = getUserIdFromToken()
+    socket.send(
+      JSON.stringify({
+        type: "group-message",
+        from: userId,
+        groupId,
         content,
       })
     )
