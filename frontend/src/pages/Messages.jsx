@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from "react"
+import GroupDropdown from "@/components/group/GroupDropdown"
 import {
   connectToSocket,
   sendMessage,
@@ -7,6 +8,7 @@ import {
 } from "@/api/ws/socket"
 import { getAllUsers } from "../api/user/user"
 import { getMessagesWithUser } from "../api/message/message"
+import { getUserGroups, sendGroupMessage } from "../api/user/group"
 
 const Messages = () => {
   const selectedUserIdRef = useRef(null)
@@ -19,6 +21,7 @@ const Messages = () => {
   }, [messages])
   const [input, setInput] = useState("")
   const [users, setUsers] = useState([])
+  const [groups, setGroups] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
 
   useEffect(() => {
@@ -33,23 +36,37 @@ const Messages = () => {
     if (!currentUserId) return
 
     connectToSocket((data) => {
-      const isRelevant =
-        data.fromUserId === currentUserId || data.toUserId === currentUserId
+      const currentUserId = getUserIdFromToken()
+      const selectedId = selectedUserIdRef.current
 
-      if (isRelevant) {
-        const incoming = data.toUserId === currentUserId
-        setMessages((prev) => {
-          const alreadyExists = prev.some((m) => m.id === data.id)
-          if (alreadyExists) return prev
-          return [...prev, { ...data, incoming }]
-        })
-      }
+      const isGroupMessage = !!data.groupId
+      const isDirectMessage =
+        data.toUserId === currentUserId || data.fromUserId === currentUserId
+
+      const isRelevant =
+        (isGroupMessage && selectedId === `group-${data.groupId}`) ||
+        (isDirectMessage &&
+          (data.toUserId === selectedId || data.fromUserId === selectedId))
+
+      if (!isRelevant) return
+
+      const incoming = data.fromUserId !== currentUserId
+
+      setMessages((prev) => {
+        const alreadyExists = prev.some((m) => m.id === data.id)
+        if (alreadyExists) return prev
+        return [...prev, { ...data, incoming }]
+      })
     })
 
     // Fetch all users for inbox
     getAllUsers()
       .then((users) => setUsers(users))
       .catch((err) => console.error("❌ Error fetching users:", err))
+
+    getUserGroups()
+      .then(setGroups)
+      .catch((err) => console.error("❌ Error fetching groups:", err))
 
     return () => disconnectSocket()
   }, [])
@@ -63,7 +80,9 @@ const Messages = () => {
 
         const processedMessages = fetchedMessages.map((msg) => ({
           ...msg,
-          incoming: msg.toUserId === currentUserId, // entrante si el destinatario soy yo
+          incoming: msg.groupId
+            ? msg.fromUserId !== currentUserId // ✅ si es grupo, entrante si NO soy yo
+            : msg.toUserId === currentUserId, // ✅ si es directo, entrante si soy el destinatario
         }))
 
         setMessages((prevMessages) => {
@@ -84,19 +103,40 @@ const Messages = () => {
   const handleSend = () => {
     if (!selectedUserId || !input.trim()) return
 
-    sendMessage(selectedUserId, input)
+    const isGroup =
+      typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
+    const content = input
     const fromUserId = getUserIdFromToken()
-    setMessages((prev) => [
-      ...prev,
-      {
-        fromUserId,
-        toUserId: selectedUserId,
-        content: input,
-        incoming: false,
-        createdAt: new Date().toISOString(),
-        id: crypto.randomUUID(), // fake ID until it's replaced by backend fetch
-      },
-    ])
+
+    if (isGroup) {
+      const groupId = parseInt(selectedUserId.split("group-")[1])
+      sendGroupMessage(groupId, content)
+      setMessages((prev) => [
+        ...prev,
+        {
+          fromUserId,
+          groupId,
+          content,
+          incoming: false,
+          createdAt: new Date().toISOString(),
+          id: crypto.randomUUID(),
+        },
+      ])
+    } else {
+      sendMessage(selectedUserId, content)
+      setMessages((prev) => [
+        ...prev,
+        {
+          fromUserId,
+          toUserId: selectedUserId,
+          content,
+          incoming: false,
+          createdAt: new Date().toISOString(),
+          id: crypto.randomUUID(),
+        },
+      ])
+    }
+
     setInput("")
   }
 
@@ -104,20 +144,44 @@ const Messages = () => {
     <div className="flex flex-row flex-1 w-full gap-2 px-4 pb-4 bg-background text-foreground overflow-hidden">
       {/* INBOX SIDEBAR */}
       <div className="w-[300px] bg-muted/20 backdrop-blur-sm border border-border text-muted-foreground p-4 rounded-xl flex flex-col gap-4">
-        <h2 className="text-lg font-semibold">Inbox</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Inbox</h2>
+          <GroupDropdown />
+        </div>
         {Array.isArray(users) && users.length > 0 ? (
-          users.map((user) => (
-            <button
-              key={user.id}
-              onClick={() => setSelectedUserId(user.id)}
-              className={`text-left px-4 py-2 rounded-lg ${
-                selectedUserId === user.id
-                  ? "bg-muted text-foreground"
-                  : "hover:bg-muted/30"
-              }`}>
-              {user.name}
-            </button>
-          ))
+          <>
+            {users.map((user) => (
+              <button
+                key={user.id}
+                onClick={() => setSelectedUserId(user.id)}
+                className={`text-left px-4 py-2 rounded-lg ${
+                  selectedUserId === user.id
+                    ? "bg-muted text-foreground"
+                    : "hover:bg-muted/30"
+                }`}>
+                {user.name}
+              </button>
+            ))}
+            {groups.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold mb-2 text-muted-foreground">
+                  Groups
+                </h3>
+                {groups.map((group) => (
+                  <button
+                    key={`group-${group.id}`}
+                    onClick={() => setSelectedUserId(`group-${group.id}`)}
+                    className={`text-left px-4 py-2 rounded-lg ${
+                      selectedUserId === `group-${group.id}`
+                        ? "bg-muted text-foreground"
+                        : "hover:bg-muted/30"
+                    }`}>
+                    {group.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <p className="text-muted-foreground">No users found.</p>
         )}
@@ -136,7 +200,11 @@ const Messages = () => {
                 .filter(
                   (msg) =>
                     msg.fromUserId === selectedUserId ||
-                    msg.toUserId === selectedUserId
+                    msg.toUserId === selectedUserId ||
+                    (typeof selectedUserId === "string" &&
+                      selectedUserId.startsWith("group-") &&
+                      msg.groupId ===
+                        parseInt(selectedUserId.split("group-")[1]))
                 )
                 .map((msg, idx) => (
                   <div

@@ -13,18 +13,53 @@ export async function getMessagesWithUser(req, res) {
   }
 
   try {
-    const currentUserId = user.id
-    const targetUserId = parseInt(req.params.userId)
+    // const currentUserId = user.id
+    // const targetUserId = parseInt(req.params.userId)
 
-    const messages = await prisma.message.findMany({
-      where: {
-        OR: [
-          { fromUserId: currentUserId, toUserId: targetUserId },
-          { fromUserId: targetUserId, toUserId: currentUserId },
-        ],
-      },
-      orderBy: { createdAt: "asc" },
-    })
+    // const messages = await prisma.message.findMany({
+    //   where: {
+    //     OR: [
+    //       { fromUserId: currentUserId, toUserId: targetUserId },
+    //       { fromUserId: targetUserId, toUserId: currentUserId },
+    //     ],
+    //   },
+    //   orderBy: { createdAt: "asc" },
+    // })
+
+    // res.json(messages)
+    const currentUserId = user.id
+    const rawParam = req.params.userId
+    const isGroup =
+      typeof rawParam === "string" && rawParam.startsWith("group-")
+
+    let messages = []
+
+    if (isGroup) {
+      const groupId = parseInt(rawParam.split("group-")[1])
+      if (isNaN(groupId)) {
+        return res.status(400).json({ error: "Invalid group ID" })
+      }
+
+      messages = await prisma.message.findMany({
+        where: { groupId },
+        orderBy: { createdAt: "asc" },
+      })
+    } else {
+      const targetUserId = parseInt(rawParam)
+      if (isNaN(targetUserId)) {
+        return res.status(400).json({ error: "Invalid user ID" })
+      }
+
+      messages = await prisma.message.findMany({
+        where: {
+          OR: [
+            { fromUserId: currentUserId, toUserId: targetUserId },
+            { fromUserId: targetUserId, toUserId: currentUserId },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+      })
+    }
 
     res.json(messages)
   } catch (error) {

@@ -45,6 +45,41 @@ export function setupWebSocket(wss) {
           }
         }
 
+        if (msg.type === "group-message") {
+          const { from, groupId, content } = msg
+
+          const savedMessage = await prisma.message.create({
+            data: {
+              fromUserId: from,
+              groupId,
+              content,
+            },
+          })
+
+          const group = await prisma.group.findUnique({
+            where: { id: groupId },
+            include: { members: true },
+          })
+
+          for (const member of group.members) {
+            const client = clients.get(member.id)
+            if (client) {
+              client.send(
+                JSON.stringify({
+                  type: "group-message",
+                  fromUserId: from,
+                  groupId,
+                  content,
+                  id: savedMessage.id,
+                  createdAt: savedMessage.createdAt,
+                })
+              )
+            }
+          }
+
+          return
+        }
+
         if (msg.type === "disconnect") {
           clients.delete(msg.userId)
           console.log(chalk.gray(`👋 Disconnected client: ${msg.userId}`))

@@ -12,11 +12,13 @@ model User {
   name         String
   email        String    @unique
   passwordHash String
-  mfaSecret    String? // opcional
+  mfaSecret    String?
   createdAt    DateTime  @default(now())
   sessions     Session[]
+
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  groups           Group[]   @relation("GroupMembers")
 }
 
 model Session {
@@ -28,12 +30,28 @@ model Session {
   expiresAt DateTime
 }
 
+
 model Message {
   id          Int      @id @default(autoincrement())
+
   fromUser    User     @relation("SentMessages", fields: [fromUserId], references: [id])
   fromUserId  Int
-  toUser      User     @relation("ReceivedMessages", fields: [toUserId], references: [id])
-  toUserId    Int
+
+  toUser      User?    @relation("ReceivedMessages", fields: [toUserId], references: [id])
+  toUserId    Int?
+
+  group       Group?   @relation(fields: [groupId], references: [id])
+  groupId     Int?
+
   content     String
   createdAt   DateTime @default(now())
 }
+
+model Group {
+  id        Int       @id @default(autoincrement())
+  name      String
+  members   User[]    @relation("GroupMembers") 
+  messages  Message[]
+  createdAt DateTime  @default(now())
+}
+
