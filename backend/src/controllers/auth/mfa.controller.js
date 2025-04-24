@@ -1,6 +1,6 @@
-import speakeasy from "speakeasy"
-import qrcode from "qrcode"
 import chalk from "chalk"
+import qrcode from "qrcode"
+import speakeasy from "speakeasy"
 
 import jwt from "jsonwebtoken"
 import prisma from "../../database.js"

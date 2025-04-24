@@ -28,6 +28,7 @@
     "axios": "^1.8.4",
     "bcrypt": "^5.1.1",
     "class-variance-authority": "^0.7.1",
+    "classnames": "^2.5.1",
     "clsx": "^2.1.1",
     "input-otp": "^1.4.2",
     "jwt-decode": "^4.0.0",
