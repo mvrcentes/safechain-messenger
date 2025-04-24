@@ -1,4 +1,5 @@
 import chalk from "chalk"
+import prisma from "../database.js"
 
 const clients = new Map()
 
@@ -6,7 +7,7 @@ export function setupWebSocket(wss) {
   wss.on("connection", (ws) => {
     console.log(chalk.blue("📡 New WebSocket connection"))
 
-    ws.on("message", (data) => {
+    ws.on("message", async (data) => {
       try {
         const msg = JSON.parse(data)
 
@@ -18,21 +19,30 @@ export function setupWebSocket(wss) {
         }
 
         if (msg.type === "message") {
-          const { to, encryptedMessage, from } = msg
+          const { to, from, content } = msg
+
+          const savedMessage = await prisma.message.create({
+            data: {
+              fromUserId: from,
+              toUserId: to,
+              content,
+            },
+          })
+
           const recipient = clients.get(to)
+
           if (recipient) {
             recipient.send(
               JSON.stringify({
                 type: "message",
-                from,
-                encryptedMessage,
+                fromUserId: from,
+                toUserId: to,
+                content,
+                id: savedMessage.id,
+                createdAt: savedMessage.createdAt,
               })
             )
-            console.log(chalk.cyan(`📤 Message from ${from} sent to ${to}`))
-          } else {
-            console.warn(chalk.yellow(`⚠️ Recipient ${to} not connected`))
           }
-          return
         }
 
         if (msg.type === "disconnect") {

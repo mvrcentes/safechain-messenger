@@ -40,15 +40,17 @@ export function connectToSocket(onIncomingMessage) {
   })
 }
 
-export function sendMessage(to, encryptedMessage) {
+export function sendMessage(to, content) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     const userId = getUserIdFromToken()
-    socket.send(JSON.stringify({
-      type: "message",
-      from: userId,
-      to,
-      encryptedMessage,
-    }))
+    socket.send(
+      JSON.stringify({
+        type: "message",
+        from: userId,
+        to,
+        content,
+      })
+    )
   }
 }
 
