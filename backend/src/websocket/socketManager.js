@@ -76,8 +76,6 @@ export function setupWebSocket(wss) {
               )
             }
           }
-
-          return
         }
 
         if (msg.type === "disconnect") {

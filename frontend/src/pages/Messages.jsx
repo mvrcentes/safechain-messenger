@@ -5,6 +5,7 @@ import {
   sendMessage,
   disconnectSocket,
   getUserIdFromToken,
+  sendGroupSocketMessage,
 } from "@/api/ws/socket"
 import { getAllUsers } from "../api/user/user"
 import { getMessagesWithUser } from "../api/message/message"
@@ -39,12 +40,20 @@ const Messages = () => {
       const currentUserId = getUserIdFromToken()
       const selectedId = selectedUserIdRef.current
 
-      const isGroupMessage = !!data.groupId
+      const isGroupMessage = typeof data.groupId === "number"
       const isDirectMessage =
         data.toUserId === currentUserId || data.fromUserId === currentUserId
 
+      let selectedGroupId = null
+      if (typeof selectedId === "string" && selectedId.startsWith("group-")) {
+        const parts = selectedId.split("group-")
+        if (parts.length > 1) {
+          selectedGroupId = parseInt(parts[1])
+        }
+      }
+
       const isRelevant =
-        (isGroupMessage && selectedId === `group-${data.groupId}`) ||
+        (isGroupMessage && selectedGroupId === data.groupId) ||
         (isDirectMessage &&
           (data.toUserId === selectedId || data.fromUserId === selectedId))
 
@@ -106,28 +115,17 @@ const Messages = () => {
     const isGroup =
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
     const content = input
-    const fromUserId = getUserIdFromToken()
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupMessage(groupId, content)
-      setMessages((prev) => [
-        ...prev,
-        {
-          fromUserId,
-          groupId,
-          content,
-          incoming: false,
-          createdAt: new Date().toISOString(),
-          id: crypto.randomUUID(),
-        },
-      ])
+      sendGroupMessage(groupId, content) // Mantén esto para persistencia
+      sendGroupSocketMessage(groupId, content) // Para tiempo real NO añadas localmente
     } else {
       sendMessage(selectedUserId, content)
       setMessages((prev) => [
         ...prev,
         {
-          fromUserId,
+          fromUserId: getUserIdFromToken(),
           toUserId: selectedUserId,
           content,
           incoming: false,

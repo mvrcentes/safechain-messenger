@@ -26,7 +26,10 @@ export function connectToSocket(onIncomingMessage) {
 
   socket.addEventListener("message", (event) => {
     const data = JSON.parse(event.data)
-    if (typeof onIncomingMessage === "function" && (data.type === "message" || data.type === "group-message")) {
+    if (
+      typeof onIncomingMessage === "function" &&
+      (data.type === "message" || data.type === "group-message")
+    ) {
       onIncomingMessage(data)
     }
   })
@@ -50,6 +53,20 @@ export function sendMessage(to, content) {
         type: "message",
         from: userId,
         to,
+        content,
+      })
+    )
+  }
+}
+
+export function sendGroupSocketMessage(groupId, content) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    const userId = getUserIdFromToken()
+    socket.send(
+      JSON.stringify({
+        type: "group-message",
+        from: userId,
+        groupId,
         content,
       })
     )
