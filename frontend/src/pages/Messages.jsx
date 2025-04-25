@@ -118,8 +118,7 @@ const Messages = () => {
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupMessage(groupId, content) // Mantén esto para persistencia
-      sendGroupSocketMessage(groupId, content) // Para tiempo real NO añadas localmente
+      sendGroupSocketMessage(groupId, content)
     } else {
       sendMessage(selectedUserId, content)
       setMessages((prev) => [
@@ -146,13 +145,15 @@ const Messages = () => {
           <h2 className="text-lg font-semibold">Inbox</h2>
           <GroupDropdown />
         </div>
-        {Array.isArray(users) && users.length > 0 ? (
-          <>
+
+        {users.length > 0 && (
+          <div className="space-y-2 mb-6">
+            <h3 className="text-sm font-semibold text-muted-foreground">Users</h3>
             {users.map((user) => (
               <button
                 key={user.id}
                 onClick={() => setSelectedUserId(user.id)}
-                className={`text-left px-4 py-2 rounded-lg ${
+                className={`text-left px-4 py-2 rounded-lg w-full ${
                   selectedUserId === user.id
                     ? "bg-muted text-foreground"
                     : "hover:bg-muted/30"
@@ -160,28 +161,25 @@ const Messages = () => {
                 {user.name}
               </button>
             ))}
-            {groups.length > 0 && (
-              <div className="mt-4">
-                <h3 className="text-sm font-semibold mb-2 text-muted-foreground">
-                  Groups
-                </h3>
-                {groups.map((group) => (
-                  <button
-                    key={`group-${group.id}`}
-                    onClick={() => setSelectedUserId(`group-${group.id}`)}
-                    className={`text-left px-4 py-2 rounded-lg ${
-                      selectedUserId === `group-${group.id}`
-                        ? "bg-muted text-foreground"
-                        : "hover:bg-muted/30"
-                    }`}>
-                    {group.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <p className="text-muted-foreground">No users found.</p>
+          </div>
+        )}
+
+        {groups.length > 0 && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">Groups</h3>
+            {groups.map((group) => (
+              <button
+                key={`group-${group.id}`}
+                onClick={() => setSelectedUserId(`group-${group.id}`)}
+                className={`text-left px-4 py-2 rounded-lg w-full ${
+                  selectedUserId === `group-${group.id}`
+                    ? "bg-muted text-foreground"
+                    : "hover:bg-muted/30"
+                }`}>
+                {group.name}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -195,15 +193,22 @@ const Messages = () => {
 
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2">
               {messages
-                .filter(
-                  (msg) =>
-                    msg.fromUserId === selectedUserId ||
-                    msg.toUserId === selectedUserId ||
-                    (typeof selectedUserId === "string" &&
-                      selectedUserId.startsWith("group-") &&
-                      msg.groupId ===
-                        parseInt(selectedUserId.split("group-")[1]))
-                )
+                .filter((msg) => {
+                  const isGroupSelected =
+                    typeof selectedUserId === "string" &&
+                    selectedUserId.startsWith("group-")
+
+                  if (isGroupSelected) {
+                    const groupId = parseInt(selectedUserId.split("group-")[1])
+                    return msg.groupId === groupId
+                  } else {
+                    return (
+                      !msg.groupId &&
+                      (msg.fromUserId === selectedUserId ||
+                        msg.toUserId === selectedUserId)
+                    )
+                  }
+                })
                 .map((msg, idx) => (
                   <div
                     key={idx}
