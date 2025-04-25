@@ -60,28 +60,47 @@ export default function GroupDropdown() {
 
         <DialogContent>
           <div className="space-y-4">
-            <input
-              type="text"
-              className="w-full rounded border p-2"
-              placeholder="Group name"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-            />
-            <ScrollArea className="max-h-60 border rounded p-2">
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  onClick={() => toggleUser(user.id)}
-                  className={`cursor-pointer rounded p-2 mb-1 flex justify-between items-center ${selectedUsers.includes(user.id) ? "bg-primary text-white" : "bg-muted"}`}
-                >
-                  {user.name || user.email}
-                  {selectedUsers.includes(user.id) && <span className="text-xs">✔</span>}
-                </div>
-              ))}
-            </ScrollArea>
-            <Button onClick={handleCreate} disabled={!groupName || selectedUsers.length < 2}>
-              Create Group
-            </Button>
+            <h2 className="text-xl font-semibold text-center">Create a New Group</h2>
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Group Name</label>
+              <input
+                type="text"
+                className="w-full rounded border border-border bg-background px-3 py-2"
+                placeholder="Enter group name"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Select Members</label>
+              <ScrollArea className="max-h-60 border rounded p-2 space-y-1">
+                {users.map((user) => (
+                  <label
+                    key={user.id}
+                    className="flex items-center gap-2 px-3 py-2 rounded hover:bg-muted cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.includes(user.id)}
+                      onChange={() => toggleUser(user.id)}
+                      className="form-checkbox h-4 w-4"
+                    />
+                    <span>{user.name || user.email}</span>
+                  </label>
+                ))}
+              </ScrollArea>
+            </div>
+
+            <div className="pt-4 text-center">
+              <Button
+                onClick={handleCreate}
+                disabled={!groupName || selectedUsers.length < 2}
+                className="w-full"
+              >
+                Create Group
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
