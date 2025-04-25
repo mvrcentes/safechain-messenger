@@ -11,6 +11,23 @@ import { getAllUsers } from "../api/user/user"
 import { getMessagesWithUser } from "../api/message/message"
 import { getUserGroups, sendGroupMessage } from "../api/user/group"
 
+const colors = [
+  "text-red-500",
+  "text-green-500",
+  "text-yellow-500",
+  "text-purple-500",
+  "text-pink-500",
+  "text-indigo-500",
+  "text-emerald-500",
+  "text-cyan-500",
+  "text-orange-500",
+]
+
+const getColorForUser = (id) => {
+  const numericId = typeof id === "string" ? id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) : id
+  return colors[numericId % colors.length]
+}
+
 const Messages = () => {
   const selectedUserIdRef = useRef(null)
   const [messages, setMessages] = useState([])
@@ -70,7 +87,11 @@ const Messages = () => {
 
     // Fetch all users for inbox
     getAllUsers()
-      .then((users) => setUsers(users))
+      .then((users) => {
+        const currentUserId = getUserIdFromToken()
+        const selfUser = { id: currentUserId, name: "You" }
+        setUsers([...users, selfUser])
+      })
       .catch((err) => console.error("❌ Error fetching users:", err))
 
     getUserGroups()
@@ -216,7 +237,21 @@ const Messages = () => {
                       msg.incoming
                         ? "bg-muted text-foreground mr-auto"
                         : "bg-primary text-primary-foreground ml-auto"
-                    }`}>
+                    }`}
+                  >
+                    {typeof selectedUserId === "string" && selectedUserId.startsWith("group-") && (
+                    <div
+                      className={`text-xs font-semibold mb-1 ${
+                        msg.fromUserId === getUserIdFromToken()
+                          ? "text-blue-500"
+                          : getColorForUser(msg.fromUserId)
+                      }`}
+                    >
+                      {msg.fromUserId === getUserIdFromToken()
+                        ? "You"
+                        : users.find((u) => u.id === msg.fromUserId)?.name || "Unknown"}
+                    </div>
+                    )}
                     {msg.content}
                   </div>
                 ))}
