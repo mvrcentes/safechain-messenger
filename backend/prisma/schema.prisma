@@ -13,6 +13,7 @@ model User {
   email        String    @unique
   passwordHash String
   mfaSecret    String?
+  publicKey    String?   @db.Text
   createdAt    DateTime  @default(now())
   sessions     Session[]
 
@@ -54,4 +55,3 @@ model Group {
   messages  Message[]
   createdAt DateTime  @default(now())
 }
-

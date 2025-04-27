@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import MFA from "@/pages/settings/MFA"
+import Keys from "@/pages/settings/Keys"
 
 const Settings = () => {
   const [selected, setSelected] = useState("mfa")
@@ -55,6 +56,16 @@ const Settings = () => {
                       </button>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton asChild>
+                      <button
+                        onClick={() => setSelected("keys")}
+                        className="flex items-center gap-2 w-full text-sm"
+                      >
+                        Keys
+                      </button>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -79,6 +90,11 @@ const Settings = () => {
         {selected === "mfa" && (
           <div>
             <MFA />
+          </div>
+        )}
+        {selected === "keys" && (
+          <div>
+            <Keys />
           </div>
         )}
       </div>
