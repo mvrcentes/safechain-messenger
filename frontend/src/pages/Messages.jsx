@@ -49,6 +49,7 @@ const Messages = () => {
   const [groups, setGroups] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [privateEncryptKey, setPrivateEncryptKey] = useState("")
+  const privateEncryptKeyRef = useRef("")
 
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId
@@ -103,8 +104,9 @@ const Messages = () => {
       const baseMsg = { ...data, incoming }
       let finalMsg = baseMsg
 
-      if (privateEncryptKey?.trim() && incoming) {
-        finalMsg = await decryptIfNeeded(baseMsg, privateEncryptKey)
+      const key = privateEncryptKeyRef.current
+      if (incoming ) {
+        finalMsg = await decryptIfNeeded(baseMsg, key)
       }
 
       setMessages((prev) => {
@@ -225,8 +227,12 @@ const Messages = () => {
   useEffect(() => {
     if (!privateEncryptKey?.trim()) {
       // Clave eliminada, restauramos los mensajes al estado cifrado
-      setMessages((prev) => prev.map(({ decryptedContent, ...msg }) => msg))
+      setMessages((prev) => prev.map(({ ...msg }) => msg))
     }
+  }, [privateEncryptKey])
+
+  useEffect(() => {
+    privateEncryptKeyRef.current = privateEncryptKey
   }, [privateEncryptKey])
 
   return (
