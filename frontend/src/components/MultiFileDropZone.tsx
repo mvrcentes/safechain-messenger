@@ -188,6 +188,7 @@ const MultiFileDropzone = React.forwardRef<HTMLInputElement, InputProps>(
                       className="rounded-md p-1 transition-colors duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       onClick={() => {
                         void onChange?.(value.filter((_, index) => index !== i))
+                        if (value.length === 1) onFilesAdded?.([]) // Trigger removal notification
                       }}>
                       <Trash2Icon className="shrink-0" />
                     </button>

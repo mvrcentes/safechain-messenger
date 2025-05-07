@@ -7,7 +7,6 @@ export async function hashPassword(password) {
     .join("")
 }
 
-
 export async function encryptWithPublicKey(publicKeyPem, message) {
   const encoder = new TextEncoder()
   const encodedMessage = encoder.encode(message)
@@ -46,9 +45,10 @@ export async function encryptWithPublicKey(publicKeyPem, message) {
   return btoa(String.fromCharCode(...new Uint8Array(encrypted)))
 }
 
-export async function decryptWithPrivateKey(privateKeyPem, encryptedMessageBase64) {
-  
-  
+export async function decryptWithPrivateKey(
+  privateKeyPem,
+  encryptedMessageBase64
+) {
   const pemHeader = "-----BEGIN PRIVATE KEY-----"
   const pemFooter = "-----END PRIVATE KEY-----"
   const pemContents = privateKeyPem
@@ -71,9 +71,8 @@ export async function decryptWithPrivateKey(privateKeyPem, encryptedMessageBase6
     ["decrypt"]
   )
 
-  const encryptedData = Uint8Array.from(
-    atob(encryptedMessageBase64),
-    (c) => c.charCodeAt(0)
+  const encryptedData = Uint8Array.from(atob(encryptedMessageBase64), (c) =>
+    c.charCodeAt(0)
   )
 
   const decrypted = await crypto.subtle.decrypt(
