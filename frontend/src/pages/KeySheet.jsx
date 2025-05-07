@@ -13,11 +13,14 @@ export default function KeySheet({ onPrivateEncryptKeyLoaded }) {
   const [files, setFiles] = useState([])
 
   const handleFilesAdded = async (addedFiles) => {
-    if (addedFiles.length > 0) {
-      const file = addedFiles[0].file
-      const text = await file.text()
-      onPrivateEncryptKeyLoaded(text)
+    if (addedFiles.length === 0) {
+      onPrivateEncryptKeyLoaded("") // Trigger key removal
+      return
     }
+
+    const file = addedFiles[0].file
+    const text = await file.text()
+    onPrivateEncryptKeyLoaded(text)
   }
   return (
     <Sheet>
