@@ -1,10 +1,10 @@
 import argon2 from "argon2"
+import chalk from "chalk"
 import { serialize } from "cookie"
 import dayjs from "dayjs"
 import jwt from "jsonwebtoken"
-import { v4 as uuidv4 } from "uuid"
 import speakeasy from "speakeasy"
-import chalk from "chalk"
+import { v4 as uuidv4 } from "uuid"
 
 import prisma from "../../database.js"
 
@@ -82,16 +82,16 @@ export const login = async (req, res) => {
       },
     })
 
-  if (!user) {
-    console.log(chalk.red("❌ Login failed - User not found"))
-    return res.status(404).json({ error: "User not found" })
-  }
+    if (!user) {
+      console.log(chalk.red("❌ Login failed - User not found"))
+      return res.status(404).json({ error: "User not found" })
+    }
 
     const valid = await argon2.verify(user.passwordHash, password)
-  if (!valid) {
-    console.log(chalk.red("❌ Login failed - Incorrect password"))
-    return res.status(401).json({ error: "Incorrect password" })
-  }
+    if (!valid) {
+      console.log(chalk.red("❌ Login failed - Incorrect password"))
+      return res.status(401).json({ error: "Incorrect password" })
+    }
 
     if (user.mfaSecret) {
       console.log(chalk.yellow("🔐 MFA required for user:"), user.email)
@@ -159,7 +159,9 @@ export const loginWithMFA = async (req, res) => {
     })
 
     if (!user || !user.mfaSecret) {
-      console.log(chalk.red("❌ MFA login failed - MFA not active or user not found"))
+      console.log(
+        chalk.red("❌ MFA login failed - MFA not active or user not found")
+      )
       return res.status(403).json({ error: "MFA not active" })
     }
 
@@ -227,10 +229,16 @@ export const refreshToken = async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { id: session.userId } })
   if (!user) {
-    console.warn(chalk.yellow("⚠️ Refresh valid session, but user not found:"), session.userId)
+    console.warn(
+      chalk.yellow("⚠️ Refresh valid session, but user not found:"),
+      session.userId
+    )
     return res.status(403).json({ error: "Session valid, but user not found" })
   }
-  console.log(chalk.green("✅ Refresh successful - New token issued for:"), user.email)
+  console.log(
+    chalk.green("✅ Refresh successful - New token issued for:"),
+    user.email
+  )
 
   const newAccessToken = jwt.sign(
     { id: user.id, email: user.email },

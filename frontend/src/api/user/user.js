@@ -6,3 +6,8 @@ export const getAllUsers = async () => {
     const res = await axios.get(`${API_URL}/all`)
     return res.data
 }
+
+export const getPublicEncryptKeyByUserId = async (userId) => {
+  const res = await axios.get(`${API_URL}/${userId}/public-key`)
+  return res.data.publicKey
+}

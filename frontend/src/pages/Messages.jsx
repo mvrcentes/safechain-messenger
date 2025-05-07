@@ -9,7 +9,11 @@ import {
 } from "@/api/ws/socket"
 import { getAllUsers } from "../api/user/user"
 import { getMessagesWithUser } from "../api/message/message"
-import { getUserGroups, sendGroupMessage } from "../api/user/group"
+import { getUserGroups } from "../api/user/group"
+import { getPublicEncryptKeyByUserId } from "../api/user/user"
+import { encryptWithPublicKey, decryptWithPrivateKey } from "../lib/crypto"
+import KeySheet from "./KeySheet"
+import { toast } from "sonner"
 
 const colors = [
   "text-red-500",
@@ -24,7 +28,10 @@ const colors = [
 ]
 
 const getColorForUser = (id) => {
-  const numericId = typeof id === "string" ? id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) : id
+  const numericId =
+    typeof id === "string"
+      ? id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0)
+      : id
   return colors[numericId % colors.length]
 }
 
@@ -41,10 +48,24 @@ const Messages = () => {
   const [users, setUsers] = useState([])
   const [groups, setGroups] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
+  const [privateEncryptKey, setPrivateEncryptKey] = useState("")
 
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId
   }, [selectedUserId])
+
+  // Helper to decrypt only new incoming messages (stable definition)
+  const decryptIfNeeded = async (msg, key) => {
+    if (!msg.incoming || !key?.trim()) return msg
+    try {
+      const decrypted = await decryptWithPrivateKey(key, msg.content)
+      console.log("Intentando descifrar:", msg.content)
+      return { ...msg, decryptedContent: decrypted }
+    } catch (err) {
+      console.error("❌ Error decrypting incoming message:", err)
+      return msg
+    }
+  }
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -53,7 +74,7 @@ const Messages = () => {
     const currentUserId = getUserIdFromToken()
     if (!currentUserId) return
 
-    connectToSocket((data) => {
+    connectToSocket(async (data) => {
       const currentUserId = getUserIdFromToken()
       const selectedId = selectedUserIdRef.current
 
@@ -78,10 +99,18 @@ const Messages = () => {
 
       const incoming = data.fromUserId !== currentUserId
 
+      // Use latest privateEncryptKey for decryption
+      const baseMsg = { ...data, incoming }
+      let finalMsg = baseMsg
+
+      if (privateEncryptKey?.trim() && incoming) {
+        finalMsg = await decryptIfNeeded(baseMsg, privateEncryptKey)
+      }
+
       setMessages((prev) => {
-        const alreadyExists = prev.some((m) => m.id === data.id)
+        const alreadyExists = prev.some((m) => m.id === finalMsg.id)
         if (alreadyExists) return prev
-        return [...prev, { ...data, incoming }]
+        return [...prev, finalMsg]
       })
     })
 
@@ -130,33 +159,75 @@ const Messages = () => {
       })
   }, [selectedUserId])
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!selectedUserId || !input.trim()) return
 
     const isGroup =
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
     const content = input
+    const fromUserId = getUserIdFromToken()
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupSocketMessage(groupId, content)
+      sendGroupSocketMessage(groupId, content) // 🔐 ← grupo todavía sin cifrado individual
     } else {
-      sendMessage(selectedUserId, content)
-      setMessages((prev) => [
-        ...prev,
-        {
-          fromUserId: getUserIdFromToken(),
-          toUserId: selectedUserId,
-          content,
-          incoming: false,
-          createdAt: new Date().toISOString(),
-          id: crypto.randomUUID(),
-        },
-      ])
+      try {
+        const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
+        const encrypted = await encryptWithPublicKey(publicKey, content)
+
+        sendMessage(selectedUserId, encrypted)
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            fromUserId,
+            toUserId: selectedUserId,
+            content: encrypted,
+            incoming: false,
+            createdAt: new Date().toISOString(),
+            id: crypto.randomUUID(),
+          },
+        ])
+      } catch (err) {
+        console.error("❌ Error encrypting or sending message:", err)
+      }
     }
 
     setInput("")
   }
+
+  const handlePrivateKey = (key) => {
+    if (!key?.trim()) {
+      toast.warning(
+        "🔐 Clave eliminada. Los mensajes volverán a mostrarse cifrados."
+      )
+    } else {
+      toast.success(
+        "🔓 Clave privada importada. Los mensajes nuevos se descifrarán."
+      )
+    }
+    setPrivateEncryptKey(key)
+  }
+
+  useEffect(() => {
+    const decryptMessages = async () => {
+      if (!privateEncryptKey?.trim()) return
+
+      const updated = await Promise.all(
+        messages.map((msg) => decryptIfNeeded(msg, privateEncryptKey))
+      )
+      setMessages(updated)
+    }
+
+    decryptMessages()
+  }, [privateEncryptKey])
+
+  useEffect(() => {
+    if (!privateEncryptKey?.trim()) {
+      // Clave eliminada, restauramos los mensajes al estado cifrado
+      setMessages((prev) => prev.map(({ decryptedContent, ...msg }) => msg))
+    }
+  }, [privateEncryptKey])
 
   return (
     <div className="flex flex-row flex-1 w-full gap-2 px-4 pb-4 bg-background text-foreground overflow-hidden">
@@ -169,7 +240,9 @@ const Messages = () => {
 
         {users.length > 0 && (
           <div className="space-y-2 mb-6">
-            <h3 className="text-sm font-semibold text-muted-foreground">Users</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Users
+            </h3>
             {users.map((user) => (
               <button
                 key={user.id}
@@ -187,7 +260,9 @@ const Messages = () => {
 
         {groups.length > 0 && (
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-muted-foreground">Groups</h3>
+            <h3 className="text-sm font-semibold text-muted-foreground">
+              Groups
+            </h3>
             {groups.map((group) => (
               <button
                 key={`group-${group.id}`}
@@ -208,10 +283,13 @@ const Messages = () => {
       <div className="flex-1 flex flex-col p-6 bg-muted/10 border border-border rounded-xl overflow-hidden">
         {selectedUserId ? (
           <>
-            <h2 className="text-xl font-semibold mb-4">
-              Chat with {users.find((u) => u.id === selectedUserId)?.name}
-            </h2>
+            <div className="flex">
+              <h2 className="text-xl font-semibold mb-4">
+                Chat with {users.find((u) => u.id === selectedUserId)?.name}
+              </h2>
 
+              <KeySheet onPrivateEncryptKeyLoaded={handlePrivateKey} />
+            </div>
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2">
               {messages
                 .filter((msg) => {
@@ -237,22 +315,22 @@ const Messages = () => {
                       msg.incoming
                         ? "bg-muted text-foreground mr-auto"
                         : "bg-primary text-primary-foreground ml-auto"
-                    }`}
-                  >
-                    {typeof selectedUserId === "string" && selectedUserId.startsWith("group-") && (
-                    <div
-                      className={`text-xs font-semibold mb-1 ${
-                        msg.fromUserId === getUserIdFromToken()
-                          ? "text-blue-500"
-                          : getColorForUser(msg.fromUserId)
-                      }`}
-                    >
-                      {msg.fromUserId === getUserIdFromToken()
-                        ? "You"
-                        : users.find((u) => u.id === msg.fromUserId)?.name || "Unknown"}
-                    </div>
-                    )}
-                    {msg.content}
+                    }`}>
+                    {typeof selectedUserId === "string" &&
+                      selectedUserId.startsWith("group-") && (
+                        <div
+                          className={`text-xs font-semibold mb-1 ${
+                            msg.fromUserId === getUserIdFromToken()
+                              ? "text-blue-500"
+                              : getColorForUser(msg.fromUserId)
+                          }`}>
+                          {msg.fromUserId === getUserIdFromToken()
+                            ? "You"
+                            : users.find((u) => u.id === msg.fromUserId)
+                                ?.name || "Unknown"}
+                        </div>
+                      )}
+                    {msg.decryptedContent || msg.content}
                   </div>
                 ))}
               <div ref={messagesEndRef} />

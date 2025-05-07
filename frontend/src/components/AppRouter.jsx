@@ -27,9 +27,7 @@ const AppRouter = () => {
           path="/settings"
           element={
             <ProtectedRoute>
-              <SidebarProvider>
-                <Settings />
-              </SidebarProvider>
+              <Settings />
             </ProtectedRoute>
           }
         />

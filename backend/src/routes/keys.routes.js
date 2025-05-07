@@ -1,5 +1,9 @@
 import { Router } from "express"
-import { getKeys, createKeys, updateKeys } from "../controllers/keys/keys.controller.js"
+import {
+  createKeys,
+  getKeys,
+  updateKeys,
+} from "../controllers/keys/keys.controller.js"
 
 const router = Router()
 
