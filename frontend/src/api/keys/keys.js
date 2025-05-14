@@ -1,5 +1,3 @@
-
-
 import axios from "@/lib/axios"
 
 const API_URL = import.meta.env.VITE_API_URL + "/keys"
@@ -16,5 +14,10 @@ export const createPublicKey = async (publicKey) => {
 
 export const updatePublicKey = async (publicKey) => {
   const res = await axios.put(`${API_URL}`, { publicKey })
+  return res.data
+}
+
+export const updateSigningKey = async (signingPublicKey) => {
+  const res = await axios.put(`${API_URL}/signing`, { signingPublicKey })
   return res.data
 }

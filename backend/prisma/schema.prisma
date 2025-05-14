@@ -1,7 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "./node_modules/@prisma/client"
-
 }
 
 datasource db {
@@ -10,14 +8,15 @@ datasource db {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
-  name         String
-  email        String    @unique
-  passwordHash String
-  mfaSecret    String?
-  publicKey    String?   @db.Text
-  createdAt    DateTime  @default(now())
-  sessions     Session[]
+  id               Int       @id @default(autoincrement())
+  name             String
+  email            String    @unique
+  passwordHash     String
+  mfaSecret        String?
+  publicKey        String?   @db.Text
+  signingPublicKey String?   @db.Text
+  createdAt        DateTime  @default(now())
+  sessions         Session[]
 
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")

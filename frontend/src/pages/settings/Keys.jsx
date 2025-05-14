@@ -2,12 +2,36 @@ import React, { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { createPublicKey, getPublicKey, updatePublicKey } from "@/api/keys/keys"
+import { createPublicKey, getPublicKey, updatePublicKey, updateSigningKey } from "@/api/keys/keys"
 import { generateRSAKeyPair, exportPublicKey, exportPrivateKey, downloadPrivateKeyPem } from "@/components/KeysFunctions"
 
 const Keys = () => {
   const [hasKeys, setHasKeys] = useState(false)
   const [publicKey, setPublicKey] = useState("")
+  const [signingPublicKey, setSigningPublicKey] = useState("")
+  async function handleGenerateSigningKeys() {
+    try {
+      const signingKeyPair = await window.crypto.subtle.generateKey(
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256",
+        },
+        true,
+        ["sign", "verify"]
+      )
+
+      const signingPublicKeyPem = await exportPublicKey(signingKeyPair.publicKey)
+      const signingPrivateKeyPem = await exportPrivateKey(signingKeyPair.privateKey)
+
+      downloadPrivateKeyPem(signingPrivateKeyPem)
+      setSigningPublicKey(signingPublicKeyPem)
+      await updateSigningKey(signingPublicKeyPem)
+    } catch (error) {
+      console.error("❌ Error generating signing keys:", error)
+    }
+  }
 
   useEffect(() => {
     async function fetchPublicKey() {
@@ -16,6 +40,9 @@ const Keys = () => {
         if (data.publicKey) {
           setPublicKey(data.publicKey)
           setHasKeys(true)
+        }
+        if (data.signingPublicKey) {
+          setSigningPublicKey(data.signingPublicKey)
         }
       } catch (error) {
         console.error("❌ Error loading public key:", error)
@@ -27,6 +54,7 @@ const Keys = () => {
 
   async function handleEnableKeys() {
     try {
+      // Generate encryption key pair (RSA-OAEP)
       const keyPair = await generateRSAKeyPair()
 
       const publicKeyPem = await exportPublicKey(keyPair.publicKey)
@@ -36,6 +64,27 @@ const Keys = () => {
       setPublicKey(publicKeyPem)
 
       downloadPrivateKeyPem(privateKeyPem)
+
+      // Generate signing key pair (RSASSA-PKCS1-v1_5)
+      const signingKeyPair = await window.crypto.subtle.generateKey(
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256",
+        },
+        true,
+        ["sign", "verify"]
+      )
+
+      const signingPublicKeyPem = await exportPublicKey(signingKeyPair.publicKey)
+      const signingPrivateKeyPem = await exportPrivateKey(signingKeyPair.privateKey)
+
+      downloadPrivateKeyPem(signingPrivateKeyPem)
+
+      setSigningPublicKey(signingPublicKeyPem)
+      await updateSigningKey(signingPublicKeyPem)
+      console.log("✅ Signing key updated")
 
       setHasKeys(true)
     } catch (error) {
@@ -61,12 +110,15 @@ const Keys = () => {
 
   async function handleUpdateKeys() {
     try {
-      if (publicKey) {
+      if (publicKey || signingPublicKey) {
         await updatePublicKey(publicKey)
-        console.log("✅ Public key updated successfully")
+        if (signingPublicKey) {
+          await updateSigningKey(signingPublicKey)
+        }
+        console.log("✅ Keys updated successfully")
       }
     } catch (error) {
-      console.error("❌ Error updating public key:", error)
+      console.error("❌ Error updating keys:", error)
     }
   }
 
@@ -90,10 +142,19 @@ const Keys = () => {
             </>
           )}
         </div>
+        <div className="pt-6 flex gap-4">
+          <Button onClick={handleGenerateSigningKeys}>Generate Signing Keys</Button>
+        </div>
         {publicKey && (
           <div className="mt-6 space-y-2">
             <Label>Public Key:</Label>
             <pre className="p-4 bg-muted rounded-md overflow-auto max-h-64">{publicKey}</pre>
+          </div>
+        )}
+        {signingPublicKey && (
+          <div className="mt-6 space-y-2">
+            <Label>Signing Public Key:</Label>
+            <pre className="p-4 bg-muted rounded-md overflow-auto max-h-64">{signingPublicKey}</pre>
           </div>
         )}
       </div>

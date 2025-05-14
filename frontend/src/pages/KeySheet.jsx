@@ -8,6 +8,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faKey } from "@fortawesome/free-solid-svg-icons"
 
 export default function KeySheet({ onPrivateEncryptKeyLoaded }) {
   const [files, setFiles] = useState([])
@@ -25,8 +27,9 @@ export default function KeySheet({ onPrivateEncryptKeyLoaded }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="sm" className="ml-auto">
-          Llaves
+        <Button variant="ghost" size="sm" className="ml-auto space-x-2">
+          <FontAwesomeIcon icon={faKey} />
+          <span></span>
         </Button>
       </SheetTrigger>
       <SheetContent side="right">
