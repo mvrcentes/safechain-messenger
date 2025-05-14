@@ -31,13 +31,13 @@ export async function exportPrivateKey(privateKey) {
   return convertArrayBufferToPem(pkcs8, "PRIVATE KEY")
 }
 
-// Descargar la private key como archivo .pem
-export function downloadPrivateKeyPem(privateKeyPem) {
+// Descargar la private key como archivo .pem con nombre personalizado
+export function downloadPrivateKeyPem(privateKeyPem, filename = "private_key.pem") {
   const blob = new Blob([privateKeyPem], { type: "application/octet-stream" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url
-  link.download = "private_key.pem"
+  link.download = filename
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
