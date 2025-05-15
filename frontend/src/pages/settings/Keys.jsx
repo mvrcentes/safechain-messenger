@@ -25,7 +25,7 @@ const Keys = () => {
       const signingPublicKeyPem = await exportPublicKey(signingKeyPair.publicKey)
       const signingPrivateKeyPem = await exportPrivateKey(signingKeyPair.privateKey)
 
-      downloadPrivateKeyPem(signingPrivateKeyPem)
+      downloadPrivateKeyPem(signingPrivateKeyPem, "firmar.pem")
       setSigningPublicKey(signingPublicKeyPem)
       await updateSigningKey(signingPublicKeyPem)
     } catch (error) {
@@ -63,7 +63,7 @@ const Keys = () => {
       await createPublicKey(publicKeyPem)
       setPublicKey(publicKeyPem)
 
-      downloadPrivateKeyPem(privateKeyPem)
+      downloadPrivateKeyPem(privateKeyPem, "encriptar.pem")
 
       // Generate signing key pair (RSASSA-PKCS1-v1_5)
       const signingKeyPair = await window.crypto.subtle.generateKey(
@@ -80,7 +80,7 @@ const Keys = () => {
       const signingPublicKeyPem = await exportPublicKey(signingKeyPair.publicKey)
       const signingPrivateKeyPem = await exportPrivateKey(signingKeyPair.privateKey)
 
-      downloadPrivateKeyPem(signingPrivateKeyPem)
+      downloadPrivateKeyPem(signingPrivateKeyPem, "firmar.pem")
 
       setSigningPublicKey(signingPublicKeyPem)
       await updateSigningKey(signingPublicKeyPem)
@@ -102,7 +102,7 @@ const Keys = () => {
       await updatePublicKey(publicKeyPem)
       setPublicKey(publicKeyPem)
 
-      downloadPrivateKeyPem(privateKeyPem)
+      downloadPrivateKeyPem(privateKeyPem, "encriptar.pem")
     } catch (error) {
       console.error("❌ Error regenerating keys:", error)
     }

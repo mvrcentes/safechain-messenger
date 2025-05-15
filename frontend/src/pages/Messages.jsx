@@ -11,8 +11,9 @@ import { getAllUsers } from "../api/user/user"
 import { getMessagesWithUser } from "../api/message/message"
 import { getUserGroups } from "../api/user/group"
 import { getPublicEncryptKeyByUserId } from "../api/user/user"
+import { getSigningPublicKeyByUserId } from "../api/user/user"
 import { encryptWithPublicKey, decryptWithPrivateKey } from "../lib/crypto"
-import KeySheet from "./KeySheet"
+import KeySheet, { SigningKeySheet } from "./KeySheet"
 import { toast } from "sonner"
 
 const colors = [
@@ -49,7 +50,9 @@ const Messages = () => {
   const [groups, setGroups] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [privateEncryptKey, setPrivateEncryptKey] = useState("")
+  const [privateSigningKey, setPrivateSigningKey] = useState(null)
   const privateEncryptKeyRef = useRef("")
+  const publicSigningKeyRef = useRef(null)
   const originalMessagesRef = useRef([])
 
   useEffect(() => {
@@ -66,6 +69,32 @@ const Messages = () => {
     } catch (err) {
       console.error("❌ Error decrypting incoming message:", err)
       return msg
+    }
+  }
+
+  const signIfPossible = async (content, signingKey) => {
+    const encryptionKey = privateEncryptKeyRef.current
+
+    if (!signingKey || signingKey === encryptionKey) {
+      console.warn("🚫 No signing key available or trying to use encryption key for signing.")
+      console.log("🧪 signingKey:", signingKey)
+      console.log("🧪 encryptionKey:", encryptionKey)
+      return null
+    }
+
+    try {
+      const encoded = new TextEncoder().encode(content)
+      const sigBuf = await window.crypto.subtle.sign(
+        { name: "RSASSA-PKCS1-v1_5" },
+        signingKey,
+        encoded
+      )
+      const signature = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
+      console.log("✅ Mensaje firmado correctamente con clave de firma:", signature)
+      return signature
+    } catch (err) {
+      console.error("❌ Error al firmar:", err)
+      return null
     }
   }
 
@@ -172,16 +201,31 @@ const Messages = () => {
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
     const content = input
     const fromUserId = getUserIdFromToken()
+    const signature = await signIfPossible(content, privateSigningKey)
+
+    if (signature && publicSigningKeyRef.current) {
+      const encoded = new TextEncoder().encode(content)
+      const isValid = await window.crypto.subtle.verify(
+        { name: "RSASSA-PKCS1-v1_5" },
+        publicSigningKeyRef.current,
+        Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
+        encoded
+      )
+      if (!isValid) {
+        toast.error("❌ Firma no válida con llave pública.")
+        return
+      }
+    }
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupSocketMessage(groupId, content) // 🔐 ← grupo todavía sin cifrado individual
+      sendGroupSocketMessage(groupId, content, signature) // 🔐 ← grupo todavía sin cifrado individual
     } else {
       try {
         const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
         const encrypted = await encryptWithPublicKey(publicKey, content)
 
-        sendMessage(selectedUserId, encrypted)
+        sendMessage(selectedUserId, encrypted, signature)
 
         setMessages((prev) => [
           ...prev,
@@ -189,6 +233,7 @@ const Messages = () => {
             fromUserId,
             toUserId: selectedUserId,
             content: encrypted,
+            signature,
             incoming: false,
             createdAt: new Date().toISOString(),
             id: crypto.randomUUID(),
@@ -207,6 +252,7 @@ const Messages = () => {
       toast.warning(
         "🔐 Clave eliminada. Los mensajes volverán a mostrarse cifrados."
       )
+      setPrivateSigningKey(null)
     } else {
       toast.success(
         "🔓 Clave privada importada. Los mensajes nuevos se descifrarán."
@@ -303,8 +349,58 @@ const Messages = () => {
               <h2 className="text-xl font-semibold mb-4">
                 Chat with {users.find((u) => u.id === selectedUserId)?.name}
               </h2>
-
               <KeySheet onPrivateEncryptKeyLoaded={handlePrivateKey} />
+              <SigningKeySheet
+                onPrivateEncryptKeyLoaded={(key) => {
+                  if (!key?.trim()) {
+                    toast.warning("🔏 Clave de firma eliminada.")
+                    setPrivateSigningKey(null)
+                  } else {
+                    toast.success("🔏 Clave de firma importada correctamente.")
+                    const keyData = atob(key.replace(/-----[^-]+-----|\n/g, ""))
+                    const keyBuffer = new Uint8Array(
+                      [...keyData].map((char) => char.charCodeAt(0))
+                    )
+                    window.crypto.subtle
+                      .importKey(
+                        "pkcs8",
+                        keyBuffer,
+                        {
+                          name: "RSASSA-PKCS1-v1_5",
+                          hash: "SHA-256",
+                        },
+                        true,
+                        ["sign"]
+                      )
+                      .then((importedKey) => {
+                        setPrivateSigningKey(importedKey)
+                        return getSigningPublicKeyByUserId(getUserIdFromToken())
+                      })
+                      .then((publicKeyPem) => {
+                        const keyData = atob(publicKeyPem.replace(/-----[^-]+-----|\n/g, ""))
+                        const keyBuffer = new Uint8Array([...keyData].map((c) => c.charCodeAt(0)))
+                        return window.crypto.subtle.importKey(
+                          "spki",
+                          keyBuffer,
+                          {
+                            name: "RSASSA-PKCS1-v1_5",
+                            hash: "SHA-256",
+                          },
+                          true,
+                          ["verify"]
+                        )
+                      })
+                      .then((publicKey) => {
+                        publicSigningKeyRef.current = publicKey
+                        toast.success("🗝️ Llave pública para verificar cargada.")
+                      })
+                      .catch((err) => {
+                        console.error("❌ Error importando clave de firma o pública:", err)
+                        toast.error("❌ No se pudo importar la clave de firma o pública.")
+                      })
+                  }
+                }}
+              />
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2">
               {messages

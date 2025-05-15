@@ -1,6 +1,24 @@
 import prisma from "../../database.js"
 import { extractUserFromToken } from "../../lib/utils.js"
 
+// Endpoint para obtener la clave pública de firma de un usuario por ID
+export async function getSigningPublicKey(req, res) {
+  const { id } = req.params
+  try {
+    const userData = await prisma.user.findUnique({
+      where: { id: parseInt(id) },
+      select: { signingPublicKey: true },
+    })
+    if (!userData?.signingPublicKey) {
+      return res.status(404).json({ error: "Signing key not found" })
+    }
+    res.json({ signingPublicKey: userData.signingPublicKey })
+  } catch (error) {
+    console.error("Error fetching signing public key:", error)
+    res.status(500).json({ error: "Failed to fetch signing public key" })
+  }
+}
+
 export async function getKeys(req, res) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith("Bearer ")) {

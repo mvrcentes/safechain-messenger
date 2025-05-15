@@ -4,6 +4,7 @@ import {
   getKeys,
   updateKeys,
   updateSigningKey,
+  getSigningPublicKey,
 } from "../controllers/keys/keys.controller.js"
 
 const router = Router()
@@ -19,5 +20,8 @@ router.put("/", updateKeys)
 
 // Actualizar la signing key
 router.put("/signing", updateSigningKey)
+
+// Obtener la clave pública de firma de un usuario específico
+router.get("/:id/signing-key", getSigningPublicKey)
 
 export default router

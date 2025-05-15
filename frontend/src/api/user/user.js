@@ -11,3 +11,9 @@ export const getPublicEncryptKeyByUserId = async (userId) => {
   const res = await axios.get(`${API_URL}/${userId}/public-key`)
   return res.data.publicKey
 }
+
+
+export const getSigningPublicKeyByUserId = async (userId) => {
+  const res = await axios.get(import.meta.env.VITE_API_URL + `/keys/${userId}/signing-key`)
+  return res.data.signingPublicKey
+}
