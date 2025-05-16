@@ -50,9 +50,10 @@ model Message {
 }
 
 model Group {
-  id        Int       @id @default(autoincrement())
-  name      String
-  members   User[]    @relation("GroupMembers") 
-  messages  Message[]
-  createdAt DateTime  @default(now())
+  id           Int       @id @default(autoincrement())
+  name         String
+  members      User[]    @relation("GroupMembers") 
+  messages     Message[]
+  symmetricKey String?   @db.Text
+  createdAt    DateTime  @default(now())
 }

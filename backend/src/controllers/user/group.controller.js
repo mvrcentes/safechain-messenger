@@ -17,9 +17,14 @@ export const createGroup = async (req, res) => {
   }
 
   try {
+    const crypto = await import("crypto")
+    const symmetricKeyBuffer = crypto.randomBytes(32) // 256-bit key
+    const symmetricKey = symmetricKeyBuffer.toString("base64")
+
     const group = await prisma.group.create({
       data: {
         name,
+        symmetricKey,
         members: {
           connect: [...memberIds.map((id) => ({ id })), { id: user.id }],
         },
