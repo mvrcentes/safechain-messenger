@@ -1,3 +1,5 @@
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faCheck } from "@fortawesome/free-solid-svg-icons"
 import React, { useEffect, useState, useRef } from "react"
 import GroupDropdown from "@/components/group/GroupDropdown"
 import {
@@ -130,19 +132,56 @@ const Messages = () => {
 
       const incoming = data.fromUserId !== currentUserId
 
+      // --- Signature verification logic ---
+      let signatureValid = false
+      if (incoming && data.signature && data.content) {
+        try {
+          const senderPublicKeyPem = await getSigningPublicKeyByUserId(data.fromUserId)
+          const keyData = atob(senderPublicKeyPem.replace(/-----[^-]+-----|\n/g, ""))
+          const keyBuffer = new Uint8Array([...keyData].map((c) => c.charCodeAt(0)))
+          const publicKey = await window.crypto.subtle.importKey(
+            "spki",
+            keyBuffer,
+            {
+              name: "RSASSA-PKCS1-v1_5",
+              hash: "SHA-256",
+            },
+            true,
+            ["verify"]
+          )
+
+          const encoded = new TextEncoder().encode(data.content)
+          const sigBytes = Uint8Array.from(atob(data.signature), (c) => c.charCodeAt(0))
+
+          signatureValid = await window.crypto.subtle.verify(
+            { name: "RSASSA-PKCS1-v1_5" },
+            publicKey,
+            sigBytes,
+            encoded
+          )
+          console.log("✅ Firma verificada:", signatureValid)
+        } catch (err) {
+          console.error("❌ Error verificando firma:", err)
+        }
+      }
+      // --- End signature verification logic ---
+
       // Use latest privateEncryptKey for decryption
       const baseMsg = { ...data, incoming }
       let finalMsg = baseMsg
 
+      // Always add signatureValid property to finalMsg
+      finalMsg = { ...finalMsg, signatureValid }
+
       const key = privateEncryptKeyRef.current
       if (incoming) {
-        finalMsg = await decryptIfNeeded(baseMsg, key)
+        finalMsg = await decryptIfNeeded(finalMsg, key)
       }
 
       setMessages((prev) => {
         const alreadyExists = prev.some((m) => m.id === finalMsg.id)
         if (alreadyExists) return prev
-        originalMessagesRef.current = [...originalMessagesRef.current, baseMsg]
+        originalMessagesRef.current = [...originalMessagesRef.current, { ...baseMsg, signatureValid }]
         return [...prev, finalMsg]
       })
     })
@@ -201,10 +240,25 @@ const Messages = () => {
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
     const content = input
     const fromUserId = getUserIdFromToken()
-    const signature = await signIfPossible(content, privateSigningKey)
+    let signature = null
+    let encrypted = content
+
+    if (isGroup) {
+      const groupId = parseInt(selectedUserId.split("group-")[1])
+      // Aquí faltaría lógica para cifrado de grupo, dejamos como plano
+    } else {
+      try {
+        const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
+        encrypted = await encryptWithPublicKey(publicKey, content)
+      } catch (err) {
+        console.error("❌ Error encrypting message:", err)
+      }
+    }
+
+    signature = await signIfPossible(encrypted, privateSigningKey)
 
     if (signature && publicSigningKeyRef.current) {
-      const encoded = new TextEncoder().encode(content)
+      const encoded = new TextEncoder().encode(encrypted)
       const isValid = await window.crypto.subtle.verify(
         { name: "RSASSA-PKCS1-v1_5" },
         publicSigningKeyRef.current,
@@ -219,12 +273,9 @@ const Messages = () => {
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupSocketMessage(groupId, content, signature) // 🔐 ← grupo todavía sin cifrado individual
+      sendGroupSocketMessage(groupId, encrypted, signature) // 🔐 ← grupo todavía sin cifrado individual
     } else {
       try {
-        const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
-        const encrypted = await encryptWithPublicKey(publicKey, content)
-
         sendMessage(selectedUserId, encrypted, signature)
 
         setMessages((prev) => [
@@ -356,7 +407,6 @@ const Messages = () => {
                     toast.warning("🔏 Clave de firma eliminada.")
                     setPrivateSigningKey(null)
                   } else {
-                    toast.success("🔏 Clave de firma importada correctamente.")
                     const keyData = atob(key.replace(/-----[^-]+-----|\n/g, ""))
                     const keyBuffer = new Uint8Array(
                       [...keyData].map((char) => char.charCodeAt(0))
@@ -392,7 +442,6 @@ const Messages = () => {
                       })
                       .then((publicKey) => {
                         publicSigningKeyRef.current = publicKey
-                        toast.success("🗝️ Llave pública para verificar cargada.")
                       })
                       .catch((err) => {
                         console.error("❌ Error importando clave de firma o pública:", err)
@@ -438,11 +487,19 @@ const Messages = () => {
                           }`}>
                           {msg.fromUserId === getUserIdFromToken()
                             ? "You"
-                            : users.find((u) => u.id === msg.fromUserId)
-                                ?.name || "Unknown"}
+                            : users.find((u) => u.id === msg.fromUserId)?.name || "Unknown"}
                         </div>
-                      )}
+                    )}
                     {msg.decryptedContent || msg.content}
+                    {!msg.incoming && (
+                      <FontAwesomeIcon
+                        icon={faCheck}
+                        style={{
+                          color: msg.signature ? "#63E6BE" : "#ff2600",
+                          marginLeft: "8px",
+                        }}
+                      />
+                    )}
                   </div>
                 ))}
               <div ref={messagesEndRef} />
