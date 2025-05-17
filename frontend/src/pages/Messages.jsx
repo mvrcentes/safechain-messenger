@@ -212,8 +212,8 @@ const Messages = () => {
         const processedMessages = fetchedMessages.map((msg) => ({
           ...msg,
           incoming: msg.groupId
-            ? msg.fromUserId !== currentUserId // ✅ si es grupo, entrante si NO soy yo
-            : msg.toUserId === currentUserId, // ✅ si es directo, entrante si soy el destinatario
+            ? msg.fromUserId !== currentUserId //✎ si es grupo, entrante si NO soy yo
+            : msg.toUserId === currentUserId, //✎ si es directo, entrante si soy el destinatario
         }))
 
         setMessages((prevMessages) => {
@@ -238,7 +238,7 @@ const Messages = () => {
 
     const isGroup =
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
-    const content = input
+    const content = input + (privateSigningKey ? "✎" : "")
     const fromUserId = getUserIdFromToken()
     let signature = null
     let encrypted = content
@@ -257,18 +257,21 @@ const Messages = () => {
 
     signature = await signIfPossible(encrypted, privateSigningKey)
 
+    // Verificación explícita de la firma también para mensajes salientes
+    let signatureValid = false
     if (signature && publicSigningKeyRef.current) {
       const encoded = new TextEncoder().encode(encrypted)
-      const isValid = await window.crypto.subtle.verify(
+      signatureValid = await window.crypto.subtle.verify(
         { name: "RSASSA-PKCS1-v1_5" },
         publicSigningKeyRef.current,
         Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
         encoded
       )
-      if (!isValid) {
+      if (!signatureValid) {
         toast.error("❌ Firma no válida con llave pública.")
         return
       }
+      // signatureValid should be true only if verification passed
     }
 
     if (isGroup) {
@@ -278,6 +281,17 @@ const Messages = () => {
       try {
         sendMessage(selectedUserId, encrypted, signature)
 
+        // Evaluar la firma incluso en mensajes enviados
+        const encoded = new TextEncoder().encode(encrypted)
+        const sigValid = signature
+          ? await window.crypto.subtle.verify(
+              { name: "RSASSA-PKCS1-v1_5" },
+              publicSigningKeyRef.current,
+              Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
+              encoded
+            )
+          : false
+
         setMessages((prev) => [
           ...prev,
           {
@@ -285,6 +299,7 @@ const Messages = () => {
             toUserId: selectedUserId,
             content: encrypted,
             signature,
+            signatureValid: sigValid,
             incoming: false,
             createdAt: new Date().toISOString(),
             id: crypto.randomUUID(),
@@ -490,14 +505,20 @@ const Messages = () => {
                             : users.find((u) => u.id === msg.fromUserId)?.name || "Unknown"}
                         </div>
                     )}
-                    {msg.decryptedContent || msg.content}
-                    {!msg.incoming && (
+                    {(msg.decryptedContent || msg.content).replace(/✎$/, "")}
+                    
+                    {msg.incoming && msg.decryptedContent?.endsWith("✎") && (
                       <FontAwesomeIcon
                         icon={faCheck}
-                        style={{
-                          color: msg.signature ? "#63E6BE" : "#ff2600",
-                          marginLeft: "8px",
-                        }}
+                        style={{ color: "#63E6BE", marginLeft: "8px" }}
+                        title="Mensaje firmado"
+                      />
+                    )}
+                    {msg.incoming && !msg.decryptedContent?.endsWith("✎") && (
+                      <FontAwesomeIcon
+                        icon={faCheck}
+                        style={{ color: "#ff2600", marginLeft: "8px" }}
+                        title="Sin firma"
                       />
                     )}
                   </div>
