@@ -21,8 +21,8 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp"
 import { saveToken } from "@/utils/utils"
-
 import { loginUser, loginWithMFA } from "@/api/auth/auth"
+import { checkAndCreatePreKeys } from "@/api/keys/keys"
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -62,6 +62,7 @@ const Login = ({ prefilledEmail = "" }) => {
       console.log({ response })
 
       saveToken(response.data.token)
+      await checkAndCreatePreKeys()
       console.log("✅ Logged in:", response)
       // Redirige al home
       navigate("/")

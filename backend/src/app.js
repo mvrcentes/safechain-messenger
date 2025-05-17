@@ -3,11 +3,11 @@ import cors from "cors"
 import express from "express"
 
 import authRoutes from "./routes/auth.routes.js"
-import mfaRoutes from "./routes/mfa.routes.js"
-import userRoutes from "./routes/user.routes.js"
-import messageRouter from "./routes/message.routes.js"
 import groupRoutes from "./routes/group.routes.js"
 import keysRoutes from "./routes/keys.routes.js"
+import messageRouter from "./routes/message.routes.js"
+import mfaRoutes from "./routes/mfa.routes.js"
+import userRoutes from "./routes/user.routes.js"
 
 const app = express()
 

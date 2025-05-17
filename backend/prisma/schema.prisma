@@ -21,6 +21,8 @@ model User {
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   groups           Group[]   @relation("GroupMembers")
+
+  PreKey PreKey[]
 }
 
 model Session {
@@ -32,28 +34,35 @@ model Session {
   expiresAt DateTime
 }
 
-
 model Message {
-  id          Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  fromUser    User     @relation("SentMessages", fields: [fromUserId], references: [id])
-  fromUserId  Int
+  fromUser   User @relation("SentMessages", fields: [fromUserId], references: [id])
+  fromUserId Int
 
-  toUser      User?    @relation("ReceivedMessages", fields: [toUserId], references: [id])
-  toUserId    Int?
+  toUser   User? @relation("ReceivedMessages", fields: [toUserId], references: [id])
+  toUserId Int?
 
-  group       Group?   @relation(fields: [groupId], references: [id])
-  groupId     Int?
+  group   Group? @relation(fields: [groupId], references: [id])
+  groupId Int?
 
-  content     String
-  createdAt   DateTime @default(now())
+  content   String
+  createdAt DateTime @default(now())
 }
 
 model Group {
-  id           Int       @id @default(autoincrement())
-  name         String
-  members      User[]    @relation("GroupMembers") 
-  messages     Message[]
-  symmetricKey String?   @db.Text
-  createdAt    DateTime  @default(now())
+  id        Int       @id @default(autoincrement())
+  name      String
+  members   User[]    @relation("GroupMembers")
+  messages  Message[]
+  createdAt DateTime  @default(now())
+}
+
+model PreKey {
+  id        Int     @id @default(autoincrement())
+  user      User    @relation(fields: [userId], references: [id])
+  userId    Int
+  type      String // "IK" | "SPK" | "OPK"
+  publicKey String  @db.Text
+  used      Boolean @default(false)
 }
