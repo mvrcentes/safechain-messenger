@@ -40,7 +40,10 @@ export async function getKeys(req, res) {
       return res.status(404).json({ error: "Keys not found" })
     }
 
-    res.json({ publicKey: userData.publicKey, signingPublicKey: userData.signingPublicKey })
+    res.json({
+      publicKey: userData.publicKey,
+      signingPublicKey: userData.signingPublicKey,
+    })
   } catch (error) {
     console.error("Error fetching keys:", error)
     res.status(500).json({ error: "Failed to fetch keys" })
@@ -91,7 +94,9 @@ export async function updateKeys(req, res) {
   const { publicKey, signingPublicKey } = req.body
 
   if (!publicKey && !signingPublicKey) {
-    return res.status(400).json({ error: "Missing public or signing public key" })
+    return res
+      .status(400)
+      .json({ error: "Missing public or signing public key" })
   }
 
   try {
@@ -105,7 +110,7 @@ export async function updateKeys(req, res) {
 
     res.json({
       publicKey: userUpdated.publicKey,
-      signingPublicKey: userUpdated.signingPublicKey
+      signingPublicKey: userUpdated.signingPublicKey,
     })
   } catch (error) {
     console.error("Error updating keys:", error)
@@ -140,5 +145,73 @@ export async function updateSigningKey(req, res) {
   } catch (error) {
     console.error("Error updating signing key:", error)
     res.status(500).json({ error: "Failed to update signing key" })
+  }
+}
+
+export async function createPreKeys(req, res) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+
+  const user = extractUserFromToken(req)
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+
+  const preKeys = req.body
+
+  if (!Array.isArray(preKeys) || preKeys.length === 0) {
+    return res.status(400).json({ error: "Invalid or missing preKeys" })
+  }
+
+  try {
+    const createdKeys = await prisma.preKey.createMany({
+      data: preKeys.map((key) => ({
+        userId: user.id,
+        type: key.type,
+        publicKey: key.publicKey,
+      })),
+    })
+
+    res
+      .status(201)
+      .json({ message: "PreKeys created", count: createdKeys.count })
+  } catch (error) {
+    console.error("Error creating PreKeys:", error)
+    res.status(500).json({ error: "Failed to create PreKeys" })
+  }
+}
+
+export async function getPreKeys(req, res) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+
+  const user = extractUserFromToken(req)
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" })
+  }
+
+  try {
+    const preKeys = await prisma.preKey.findMany({
+      where: { userId: user.id },
+      select: {
+        id: true,
+        type: true,
+        publicKey: true,
+        used: true,
+      },
+    })
+
+    if (preKeys.length === 0) {
+      return res.status(200).json({ preKeys: [] })
+    }
+
+    res.json({ preKeys })
+  } catch (error) {
+    console.error("Error fetching pre-keys:", error)
+    res.status(500).json({ error: "Failed to fetch pre-keys" })
   }
 }

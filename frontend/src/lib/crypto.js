@@ -85,3 +85,62 @@ export async function decryptWithPrivateKey(
 
   return new TextDecoder().decode(decrypted)
 }
+
+export async function generatePreKeys() {
+  async function generateKeyPair() {
+    return crypto.subtle.generateKey(
+      {
+        name: "RSA-OAEP",
+        modulusLength: 2048,
+        publicExponent: new Uint8Array([1, 0, 1]),
+        hash: "SHA-256",
+      },
+      true,
+      ["encrypt", "decrypt"]
+    )
+  }
+
+  function exportKey(key, type) {
+    return crypto.subtle.exportKey(type, key).then((buffer) => {
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)))
+      const header = type === "pkcs8" ? "PRIVATE KEY" : "PUBLIC KEY"
+      return `-----BEGIN ${header}-----\n${base64.match(/.{1,64}/g).join("\n")}\n-----END ${header}-----`
+    })
+  }
+
+  const [ik, spk, ...opks] = await Promise.all([
+    generateKeyPair(),
+    generateKeyPair(),
+    generateKeyPair(),
+    generateKeyPair(),
+    generateKeyPair(),
+    generateKeyPair(),
+    generateKeyPair(),
+  ])
+
+  const ikPub = await exportKey(ik.publicKey, "spki")
+  const ikPriv = await exportKey(ik.privateKey, "pkcs8")
+
+  const spkPub = await exportKey(spk.publicKey, "spki")
+  const spkPriv = await exportKey(spk.privateKey, "pkcs8")
+
+  const opkPairs = await Promise.all(
+    opks.map(async (kp) => ({
+      pub: await exportKey(kp.publicKey, "spki"),
+      priv: await exportKey(kp.privateKey, "pkcs8"),
+    }))
+  )
+
+  return {
+    publicKeys: [
+      { type: "IK", publicKey: ikPub },
+      { type: "SPK", publicKey: spkPub },
+      ...opkPairs.map((opk) => ({ type: "OPK", publicKey: opk.pub })),
+    ],
+    privateKeys: {
+      IK: ikPriv,
+      SPK: spkPriv,
+      OPKs: opkPairs.map((o) => o.priv),
+    },
+  }
+}

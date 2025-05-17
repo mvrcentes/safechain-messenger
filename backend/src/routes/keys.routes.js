@@ -5,6 +5,8 @@ import {
   updateKeys,
   updateSigningKey,
   getSigningPublicKey,
+  createPreKeys,
+  getPreKeys,
 } from "../controllers/keys/keys.controller.js"
 
 const router = Router()
@@ -14,6 +16,10 @@ router.get("/", getKeys)
 
 // Crear una nueva llave pública
 router.post("/", createKeys)
+
+// Publicar claves públicas (IK, SPK, OPKs)
+router.post("/prekeys", createPreKeys)
+router.get("/pre-keys", getPreKeys)
 
 // Actualizar la llave pública existente
 router.put("/", updateKeys)
