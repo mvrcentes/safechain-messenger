@@ -45,13 +45,29 @@ export async function checkAndCreatePreKeys() {
     const res = await axios.get("/keys/pre-keys")
 
     if (res.data?.preKeys?.length > 0) {
-      console.log("🟢 Ya hay pre-keys registradas")
       return
     }
 
-    console.log("🟡 No hay pre-keys, generando...")
     await generateAndSendPreKeys()
   } catch (err) {
     console.error("❌ Error al verificar pre-keys:", err)
+  }
+}
+
+export const getPreKeysByUserId = async (userId) => {
+  try {
+    const res = await axios.get(`/keys/pre-keys?userId=${userId}`)
+    const keys = res.data.preKeys || []
+
+    console.log(`🟡 Prekeys for user ${userId}:`, keys)
+
+    const IK = keys.find((k) => k.type === "IK")?.publicKey
+    const SPK = keys.find((k) => k.type === "SPK")?.publicKey
+    const OPKs = keys.filter((k) => k.type === "OPK")
+
+    return { IK, SPK, OPKs } // 👈 devolvemos todos los OPKs completos
+  } catch (error) {
+    console.error(`❌ Error fetching preKeys for user ${userId}:`, error)
+    return { IK: null, SPK: null, OPKs: [] }
   }
 }

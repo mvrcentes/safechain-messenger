@@ -12,9 +12,16 @@ import { getMessagesWithUser } from "../api/message/message"
 import { getUserGroups } from "../api/user/group"
 import { getPublicEncryptKeyByUserId } from "../api/user/user"
 import { getSigningPublicKeyByUserId } from "../api/user/user"
-import { encryptWithPublicKey, decryptWithPrivateKey } from "../lib/crypto"
+import {
+  encryptWithPublicKey,
+  decryptWithPrivateKey,
+  decryptAESGCM,
+  encryptAESGCM,
+} from "../lib/crypto"
 import KeySheet, { SigningKeySheet } from "./KeySheet"
 import { toast } from "sonner"
+import KGroupDialog from "@/components/group/KGroupDialog"
+import { prepareKGroupForDecryption } from "@/lib/x3dh/prepareKGroup"
 
 const colors = [
   "text-red-500",
@@ -54,6 +61,8 @@ const Messages = () => {
   const privateEncryptKeyRef = useRef("")
   const publicSigningKeyRef = useRef(null)
   const originalMessagesRef = useRef([])
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogGroupId, setDialogGroupId] = useState(null)
 
   useEffect(() => {
     selectedUserIdRef.current = selectedUserId
@@ -61,13 +70,31 @@ const Messages = () => {
 
   // Helper to decrypt only new incoming messages (stable definition)
   const decryptIfNeeded = async (msg, key) => {
-    if (!msg.incoming || !key?.trim()) return msg
+    // 🟢 Mensaje de grupo
+    if (msg.groupId) {
+      const groupKeyBase64 = localStorage.getItem(`k_group_${msg.groupId}`)
+      if (!groupKeyBase64) return msg
+
+      const groupKey = Uint8Array.from(atob(groupKeyBase64), (c) =>
+        c.charCodeAt(0)
+      )
+
+      try {
+        const decrypted = await decryptAESGCM(msg.content, groupKey)
+        return { ...msg, decryptedContent: decrypted }
+      } catch (err) {
+        console.error("❌ Error descifrando mensaje de grupo:", err)
+        return msg
+      }
+    }
+
+    // 🔒 Mensaje directo
+    if (!key?.trim()) return msg
     try {
       const decrypted = await decryptWithPrivateKey(key, msg.content)
-      console.log("Intentando descifrar:", msg.content)
       return { ...msg, decryptedContent: decrypted }
     } catch (err) {
-      console.error("❌ Error decrypting incoming message:", err)
+      console.error("❌ Error decrypting direct message:", err)
       return msg
     }
   }
@@ -76,7 +103,9 @@ const Messages = () => {
     const encryptionKey = privateEncryptKeyRef.current
 
     if (!signingKey || signingKey === encryptionKey) {
-      console.warn("🚫 No signing key available or trying to use encryption key for signing.")
+      console.warn(
+        "🚫 No signing key available or trying to use encryption key for signing."
+      )
       console.log("🧪 signingKey:", signingKey)
       console.log("🧪 encryptionKey:", encryptionKey)
       return null
@@ -90,7 +119,10 @@ const Messages = () => {
         encoded
       )
       const signature = btoa(String.fromCharCode(...new Uint8Array(sigBuf)))
-      console.log("✅ Mensaje firmado correctamente con clave de firma:", signature)
+      console.log(
+        "✅ Mensaje firmado correctamente con clave de firma:",
+        signature
+      )
       return signature
     } catch (err) {
       console.error("❌ Error al firmar:", err)
@@ -134,9 +166,10 @@ const Messages = () => {
       const baseMsg = { ...data, incoming }
       let finalMsg = baseMsg
 
-      const key = privateEncryptKeyRef.current
       if (incoming) {
-        finalMsg = await decryptIfNeeded(baseMsg, key)
+        // 🔄 Nuevo: Pasamos null si es grupo para que lo intente con k_group
+        const keyOrNull = baseMsg.groupId ? null : privateEncryptKeyRef.current
+        finalMsg = await decryptIfNeeded(baseMsg, keyOrNull)
       }
 
       setMessages((prev) => {
@@ -199,27 +232,77 @@ const Messages = () => {
 
     const isGroup =
       typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
-    const content = input
+    const content = input.trim()
+    setInput("")
     const fromUserId = getUserIdFromToken()
-    const signature = await signIfPossible(content, privateSigningKey)
 
-    if (signature && publicSigningKeyRef.current) {
-      const encoded = new TextEncoder().encode(content)
-      const isValid = await window.crypto.subtle.verify(
-        { name: "RSASSA-PKCS1-v1_5" },
-        publicSigningKeyRef.current,
-        Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
-        encoded
-      )
-      if (!isValid) {
-        toast.error("❌ Firma no válida con llave pública.")
-        return
+    // Signature logic only for direct (non-group) messages
+    let signature = null
+
+    if (!isGroup) {
+      signature = await signIfPossible(content, privateSigningKey)
+
+      if (signature && publicSigningKeyRef.current) {
+        const encoded = new TextEncoder().encode(content)
+        const isValid = await window.crypto.subtle.verify(
+          { name: "RSASSA-PKCS1-v1_5" },
+          publicSigningKeyRef.current,
+          Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
+          encoded
+        )
+        if (!isValid) {
+          toast.error("❌ Firma no válida con llave pública.")
+          return
+        }
       }
     }
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
-      sendGroupSocketMessage(groupId, content, signature) // 🔐 ← grupo todavía sin cifrado individual
+      const groupKeyBase64 = localStorage.getItem(`k_group_${groupId}`)
+      if (!groupKeyBase64) {
+        toast.error("🔐 No se encontró la clave del grupo.")
+        return
+      }
+
+      console.log(
+        "🧪 Clave base64 del grupo:",
+        localStorage.getItem(`k_group_${groupId}`)
+      )
+
+      if (
+        !groupKeyBase64 ||
+        typeof groupKeyBase64 !== "string" ||
+        groupKeyBase64.trim() === ""
+      ) {
+        console.error(
+          "⚠️ groupKeyBase64 está vacío o malformado:",
+          groupKeyBase64
+        )
+        toast.error("⚠️ No se encontró una clave válida para este grupo.")
+        return
+      }
+
+      const groupKey = Uint8Array.from(atob(groupKeyBase64), (c) =>
+        c.charCodeAt(0)
+      )
+
+      const plaintextBytes = new TextEncoder().encode(content)
+      const encryptedContent = await encryptAESGCM(plaintextBytes, groupKey)
+
+      sendGroupSocketMessage(groupId, encryptedContent, signature)
+      setMessages((prev) => [
+        ...prev,
+        {
+          groupId,
+          fromUserId,
+          content: encryptedContent,
+          decryptedContent: content, // 👈 esta es la línea que hace que se vea el mensaje descifrado
+          incoming: false,
+          createdAt: new Date().toISOString(),
+          id: crypto.randomUUID(),
+        },
+      ])
     } else {
       try {
         const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
@@ -271,7 +354,9 @@ const Messages = () => {
       } else {
         // Si hay clave, mostrar mensajes descifrados
         const decrypted = await Promise.all(
-          baseMessages.map((msg) => decryptIfNeeded(msg, privateEncryptKey))
+          baseMessages.map((msg) =>
+            decryptIfNeeded(msg, msg.groupId ? null : privateEncryptKey)
+          )
         )
         setMessages(decrypted)
       }
@@ -279,6 +364,30 @@ const Messages = () => {
 
     decryptMessages()
   }, [privateEncryptKey])
+
+  useEffect(() => {
+    const reprocessGroupMessages = async () => {
+      if (!selectedUserId || typeof selectedUserId !== "string") return
+
+      const isGroup = selectedUserId.startsWith("group-")
+      if (!isGroup) return
+
+      const groupId = parseInt(selectedUserId.split("group-")[1])
+      const base64Key = localStorage.getItem(`k_group_${groupId}`)
+      if (!base64Key) return
+
+      const baseMessages = originalMessagesRef.current
+
+      const updated = await Promise.all(
+        baseMessages.map((msg) =>
+          decryptIfNeeded(msg, msg.groupId ? null : privateEncryptKey)
+        )
+      )
+      setMessages(updated)
+    }
+
+    reprocessGroupMessages()
+  }, [selectedUserId])
 
   useEffect(() => {
     if (!privateEncryptKey?.trim()) {
@@ -290,6 +399,51 @@ const Messages = () => {
   useEffect(() => {
     privateEncryptKeyRef.current = privateEncryptKey
   }, [privateEncryptKey])
+
+  // Dialog state for group key downloa
+
+  useEffect(() => {
+    const testDecrypt = async () => {
+      const messageBase64 = "NLmLvDOkwArmI9oRYoGT03tXFoVyW2szXXrVrozLmiA="
+      const keyBase64 = "g5/Z4RMV2giO6eGHhkE3pLcxhvtZmhaRMgiFORLHSM4="
+      const encrypted = Uint8Array.from(atob(messageBase64), (c) =>
+        c.charCodeAt(0)
+      )
+      const iv = encrypted.slice(0, 12)
+      const ciphertext = encrypted.slice(12)
+      const key = Uint8Array.from(atob(keyBase64), (c) => c.charCodeAt(0))
+
+      const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        key,
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+      )
+
+      const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        cryptoKey,
+        ciphertext
+      )
+
+      console.log("🟢 Mensaje descifrado:", new TextDecoder().decode(decrypted))
+    }
+
+    testDecrypt()
+  }, [])
+
+  useEffect(() => {
+    if (!selectedUserId) return
+
+    const isGroup =
+      typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
+
+    if (!isGroup) return
+
+    const groupId = parseInt(selectedUserId.split("group-")[1])
+    prepareKGroupForDecryption(groupId, setDialogGroupId, setDialogOpen)
+  }, [selectedUserId])
 
   return (
     <div className="flex flex-row flex-1 w-full gap-2 px-4 pb-4 bg-background text-foreground overflow-hidden">
@@ -377,8 +531,12 @@ const Messages = () => {
                         return getSigningPublicKeyByUserId(getUserIdFromToken())
                       })
                       .then((publicKeyPem) => {
-                        const keyData = atob(publicKeyPem.replace(/-----[^-]+-----|\n/g, ""))
-                        const keyBuffer = new Uint8Array([...keyData].map((c) => c.charCodeAt(0)))
+                        const keyData = atob(
+                          publicKeyPem.replace(/-----[^-]+-----|\n/g, "")
+                        )
+                        const keyBuffer = new Uint8Array(
+                          [...keyData].map((c) => c.charCodeAt(0))
+                        )
                         return window.crypto.subtle.importKey(
                           "spki",
                           keyBuffer,
@@ -392,11 +550,18 @@ const Messages = () => {
                       })
                       .then((publicKey) => {
                         publicSigningKeyRef.current = publicKey
-                        toast.success("🗝️ Llave pública para verificar cargada.")
+                        toast.success(
+                          "🗝️ Llave pública para verificar cargada."
+                        )
                       })
                       .catch((err) => {
-                        console.error("❌ Error importando clave de firma o pública:", err)
-                        toast.error("❌ No se pudo importar la clave de firma o pública.")
+                        console.error(
+                          "❌ Error importando clave de firma o pública:",
+                          err
+                        )
+                        toast.error(
+                          "❌ No se pudo importar la clave de firma o pública."
+                        )
                       })
                   }
                 }}
@@ -442,7 +607,11 @@ const Messages = () => {
                                 ?.name || "Unknown"}
                         </div>
                       )}
-                    {msg.decryptedContent || msg.content}
+                    {
+                      msg.incoming
+                        ? msg.decryptedContent || msg.content // Si lo recibiste, intenta descifrar
+                        : msg.decryptedContent // Si tú lo enviaste, solo muestra descifrado
+                    }
                   </div>
                 ))}
               <div ref={messagesEndRef} />
@@ -473,6 +642,12 @@ const Messages = () => {
           </p>
         )}
       </div>
+
+      <KGroupDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        groupId={dialogGroupId}
+      />
     </div>
   )
 }

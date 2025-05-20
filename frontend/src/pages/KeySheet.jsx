@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react"
+import React, { useState } from "react"
 import { MultiFileDropzone } from "@/components/MultiFileDropZone"
 import {
   Sheet,
@@ -57,7 +57,6 @@ export default function KeySheet({ onPrivateEncryptKeyLoaded }) {
 
 export function SigningKeySheet({ onPrivateEncryptKeyLoaded }) {
   const [files, setFiles] = useState([])
-  const publicSigningKeyRef = useRef(null)
 
   const handleFilesAdded = async (addedFiles) => {
     if (addedFiles.length === 0) {
@@ -83,7 +82,8 @@ export function SigningKeySheet({ onPrivateEncryptKeyLoaded }) {
         </SheetHeader>
         <div className="mt-4 space-y-4 p-4">
           <p className="text-sm text-muted-foreground">
-            Aquí podrás cargar tu archivo `.pem` con la clave privada para firmar mensajes.
+            Aquí podrás cargar tu archivo `.pem` con la clave privada para
+            firmar mensajes.
           </p>
           <MultiFileDropzone
             value={files}

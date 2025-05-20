@@ -29,7 +29,7 @@ export const setLoggingOut = (value) => {
 
 export const logout = async () => {
   try {
-    setLoggingOut(true) 
+    setLoggingOut(true)
     await axios.post("/auth/logout")
   } catch (err) {
     console.error("❌ Error during logout:", err)
@@ -47,4 +47,20 @@ export const getTokenPayload = () => {
   } catch {
     return null
   }
+}
+
+export function downloadEncryptedKey(groupId, encryptedKey, ephemeralKey, opkUsed) {
+  const blob = new Blob(
+    [JSON.stringify({ groupId, encryptedKey, ephemeralKey, opkUsed }, null, 2)],
+    { type: "application/json" }
+  )
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `k_group_encrypted_${groupId}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

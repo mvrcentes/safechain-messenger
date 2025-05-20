@@ -5,30 +5,32 @@ import { extractUserFromToken } from "../../lib/utils.js"
 
 export const createGroup = async (req, res) => {
   const user = extractUserFromToken(req)
-  console.log("user", user)
-
   if (!user) return res.status(401).json({ error: "Unauthorized" })
 
-  const { name, memberIds } = req.body
-  console.log("name", name)
-  console.log("memberIds", memberIds)
+  const { name, memberIds, kGroupDeliveries, ephemeralKey } = req.body
   if (!name || !Array.isArray(memberIds)) {
     return res.status(400).json({ error: "Missing group name or member IDs" })
   }
 
   try {
-    const crypto = await import("crypto")
-    const symmetricKeyBuffer = crypto.randomBytes(32) // 256-bit key
-    const symmetricKey = symmetricKeyBuffer.toString("base64")
-
+    // Create the group with the creator and the members
     const group = await prisma.group.create({
       data: {
         name,
-        symmetricKey,
         members: {
           connect: [...memberIds.map((id) => ({ id })), { id: user.id }],
         },
       },
+    })
+
+    await prisma.groupKeyDelivery.createMany({
+      data: kGroupDeliveries.map((entry) => ({
+        groupId: group.id,
+        userId: entry.userId,
+        encryptedKey: entry.encryptedKey,
+        ephemeralKey: ephemeralKey,
+        opkHash: entry.opkHash ?? null,
+      })),
     })
 
     console.log(chalk.green(`✅ Group created: ${group.name}`))
@@ -88,5 +90,47 @@ export const sendGroupMessage = async (req, res) => {
   } catch (err) {
     console.error(chalk.red("❌ Error sending group message:"), err)
     res.status(500).json({ error: "Failed to send message" })
+  }
+}
+
+export const getEncryptedGroupKey = async (req, res) => {
+  const user = extractUserFromToken(req)
+  if (!user) return res.status(401).json({ error: "Unauthorized" })
+
+  const groupId = parseInt(req.params.groupId)
+  if (!groupId) {
+    return res.status(400).json({ error: "Missing groupId" })
+  }
+
+  try {
+    const keyDelivery = await prisma.groupKeyDelivery.findUnique({
+      where: {
+        groupId_userId: {
+          groupId,
+          userId: user.id,
+        },
+      },
+    })
+
+    if (!keyDelivery) {
+      return res
+        .status(404)
+        .json({ error: "Group key not found for this user" })
+    }
+
+    console.log({
+      encryptedKey: keyDelivery.encryptedKey,
+      ephemeralKey: keyDelivery.ephemeralKey,
+      opkUsed: keyDelivery.opkHash,
+    })
+
+    res.json({
+      encryptedKey: keyDelivery.encryptedKey,
+      ephemeralKey: keyDelivery.ephemeralKey,
+      opkUsed: keyDelivery.opkHash,
+    })
+  } catch (err) {
+    console.error("❌ Error fetching encrypted group key:", err)
+    res.status(500).json({ error: "Failed to fetch group key" })
   }
 }

@@ -189,25 +189,25 @@ export async function getPreKeys(req, res) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
-  const user = extractUserFromToken(req)
-  if (!user) {
+  const requestingUser = extractUserFromToken(req)
+  if (!requestingUser) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
+  const { userId } = req.query
+  const targetUserId = userId ? parseInt(userId) : requestingUser.id
+
   try {
     const preKeys = await prisma.preKey.findMany({
-      where: { userId: user.id },
+      where: { userId: targetUserId },
       select: {
         id: true,
         type: true,
         publicKey: true,
         used: true,
+        userId: true,
       },
     })
-
-    if (preKeys.length === 0) {
-      return res.status(200).json({ preKeys: [] })
-    }
 
     res.json({ preKeys })
   } catch (error) {
