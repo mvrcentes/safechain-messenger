@@ -23,6 +23,8 @@ model User {
   groups           Group[]   @relation("GroupMembers")
 
   PreKey PreKey[]
+
+  GroupKeyDelivery GroupKeyDelivery[]
 }
 
 model Session {
@@ -56,6 +58,8 @@ model Group {
   members   User[]    @relation("GroupMembers")
   messages  Message[]
   createdAt DateTime  @default(now())
+
+  GroupKeyDelivery GroupKeyDelivery[]
 }
 
 model PreKey {
@@ -65,4 +69,19 @@ model PreKey {
   type      String // "IK" | "SPK" | "OPK"
   publicKey String  @db.Text
   used      Boolean @default(false)
+}
+
+model GroupKeyDelivery {
+  id           Int     @id @default(autoincrement())
+  groupId      Int
+  userId       Int
+  encryptedKey String  @db.Text
+  delivered    Boolean @default(false)
+  group        Group   @relation(fields: [groupId], references: [id])
+  user         User    @relation(fields: [userId], references: [id])
+  ephemeralKey String? @db.Text
+  opkIndex     Int?
+  opkHash     String? @db.Text
+
+  @@unique([groupId, userId])
 }

@@ -39,10 +39,33 @@ CREATE TABLE "Message" (
 CREATE TABLE "Group" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "symmetricKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Group_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PreKey" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "type" TEXT NOT NULL,
+    "publicKey" TEXT NOT NULL,
+    "used" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "PreKey_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "GroupKeyDelivery" (
+    "id" SERIAL NOT NULL,
+    "groupId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "encryptedKey" TEXT NOT NULL,
+    "delivered" BOOLEAN NOT NULL DEFAULT false,
+    "ephemeralKey" TEXT,
+    "opkIndex" INTEGER,
+
+    CONSTRAINT "GroupKeyDelivery_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -60,6 +83,9 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "Session_token_key" ON "Session"("token");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "GroupKeyDelivery_groupId_userId_key" ON "GroupKeyDelivery"("groupId", "userId");
+
+-- CreateIndex
 CREATE INDEX "_GroupMembers_B_index" ON "_GroupMembers"("B");
 
 -- AddForeignKey
@@ -75,8 +101,16 @@ ALTER TABLE "Message" ADD CONSTRAINT "Message_toUserId_fkey" FOREIGN KEY ("toUse
 ALTER TABLE "Message" ADD CONSTRAINT "Message_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "PreKey" ADD CONSTRAINT "PreKey_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GroupKeyDelivery" ADD CONSTRAINT "GroupKeyDelivery_groupId_fkey" FOREIGN KEY ("groupId") REFERENCES "Group"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "GroupKeyDelivery" ADD CONSTRAINT "GroupKeyDelivery_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "_GroupMembers" ADD CONSTRAINT "_GroupMembers_A_fkey" FOREIGN KEY ("A") REFERENCES "Group"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_GroupMembers" ADD CONSTRAINT "_GroupMembers_B_fkey" FOREIGN KEY ("B") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
