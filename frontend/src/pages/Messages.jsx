@@ -1,3 +1,5 @@
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import { faCheck } from "@fortawesome/free-solid-svg-icons"
 import React, { useEffect, useState, useRef } from "react"
 import GroupDropdown from "@/components/group/GroupDropdown"
 import {
@@ -162,20 +164,57 @@ const Messages = () => {
 
       const incoming = data.fromUserId !== currentUserId
 
+      // --- Signature verification logic ---
+      let signatureValid = false
+      if (incoming && data.signature && data.content) {
+        try {
+          const senderPublicKeyPem = await getSigningPublicKeyByUserId(data.fromUserId)
+          const keyData = atob(senderPublicKeyPem.replace(/-----[^-]+-----|\n/g, ""))
+          const keyBuffer = new Uint8Array([...keyData].map((c) => c.charCodeAt(0)))
+          const publicKey = await window.crypto.subtle.importKey(
+            "spki",
+            keyBuffer,
+            {
+              name: "RSASSA-PKCS1-v1_5",
+              hash: "SHA-256",
+            },
+            true,
+            ["verify"]
+          )
+
+          const encoded = new TextEncoder().encode(data.content)
+          const sigBytes = Uint8Array.from(atob(data.signature), (c) => c.charCodeAt(0))
+
+          signatureValid = await window.crypto.subtle.verify(
+            { name: "RSASSA-PKCS1-v1_5" },
+            publicKey,
+            sigBytes,
+            encoded
+          )
+          console.log("✅ Firma verificada:", signatureValid)
+        } catch (err) {
+          console.error("❌ Error verificando firma:", err)
+        }
+      }
+      // --- End signature verification logic ---
+
       // Use latest privateEncryptKey for decryption
       const baseMsg = { ...data, incoming }
       let finalMsg = baseMsg
 
       if (incoming) {
-        // 🔄 Nuevo: Pasamos null si es grupo para que lo intente con k_group
+        // 🔄 Nuevo: si es mensaje de grupo, pasamos null para que decryptIfNeeded use k_group
         const keyOrNull = baseMsg.groupId ? null : privateEncryptKeyRef.current
         finalMsg = await decryptIfNeeded(baseMsg, keyOrNull)
       }
 
+      // Siempre agregamos la validez de la firma, si aplica
+      finalMsg = { ...finalMsg, signatureValid }
+            
       setMessages((prev) => {
         const alreadyExists = prev.some((m) => m.id === finalMsg.id)
         if (alreadyExists) return prev
-        originalMessagesRef.current = [...originalMessagesRef.current, baseMsg]
+        originalMessagesRef.current = [...originalMessagesRef.current, { ...baseMsg, signatureValid }]
         return [...prev, finalMsg]
       })
     })
@@ -206,8 +245,8 @@ const Messages = () => {
         const processedMessages = fetchedMessages.map((msg) => ({
           ...msg,
           incoming: msg.groupId
-            ? msg.fromUserId !== currentUserId // ✅ si es grupo, entrante si NO soy yo
-            : msg.toUserId === currentUserId, // ✅ si es directo, entrante si soy el destinatario
+            ? msg.fromUserId !== currentUserId //✎ si es grupo, entrante si NO soy yo
+            : msg.toUserId === currentUserId, //✎ si es directo, entrante si soy el destinatario
         }))
 
         setMessages((prevMessages) => {
@@ -230,66 +269,87 @@ const Messages = () => {
   const handleSend = async () => {
     if (!selectedUserId || !input.trim()) return
 
-    const isGroup =
-      typeof selectedUserId === "string" && selectedUserId.startsWith("group-")
-    const content = input.trim()
-    setInput("")
-    const fromUserId = getUserIdFromToken()
+  const isGroup =
+    typeof selectedUserId === "string" && selectedUserId.startsWith("group-");
 
-    // Signature logic only for direct (non-group) messages
-    let signature = null
+  const content = input.trim();
+  setInput("");
+  const fromUserId = getUserIdFromToken();
 
-    if (!isGroup) {
-      signature = await signIfPossible(content, privateSigningKey)
+  let signature = null;
+  let encryptedContent = content;
 
-      if (signature && publicSigningKeyRef.current) {
-        const encoded = new TextEncoder().encode(content)
-        const isValid = await window.crypto.subtle.verify(
-          { name: "RSASSA-PKCS1-v1_5" },
-          publicSigningKeyRef.current,
-          Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
-          encoded
-        )
-        if (!isValid) {
-          toast.error("❌ Firma no válida con llave pública.")
-          return
-        }
+  if (isGroup) {
+    // Mensaje de grupo: cifrar con la clave de grupo
+    const groupId = parseInt(selectedUserId.split("group-")[1]);
+    const groupKeyBase64 = localStorage.getItem(`k_group_${groupId}`);
+    if (!groupKeyBase64) {
+      toast.error("🔐 No se encontró la clave del grupo.");
+      return;
+    }
+    const groupKey = Uint8Array.from(atob(groupKeyBase64), c => c.charCodeAt(0));
+    encryptedContent = await encryptAESGCM(
+      new TextEncoder().encode(content),
+      groupKey
+    );
+  } else {
+    // Mensaje directo: cifrar con la clave pública del destinatario
+    try {
+      const publicKey = await getPublicEncryptKeyByUserId(selectedUserId);
+      encryptedContent = await encryptWithPublicKey(publicKey, content);
+    } catch (err) {
+      console.error("❌ Error encrypting message:", err);
+      toast.error("❌ No se pudo cifrar el mensaje.");
+      return;
+    }
+  }
+
+  // Firmar (si hay clave de firma)
+  if (privateSigningKey) {
+    signature = await signIfPossible(encryptedContent, privateSigningKey);
+    if (signature && publicSigningKeyRef.current) {
+      const encoded = new TextEncoder().encode(encryptedContent);
+      const isValid = await window.crypto.subtle.verify(
+        { name: "RSASSA-PKCS1-v1_5" },
+        publicSigningKeyRef.current,
+        Uint8Array.from(atob(signature), c => c.charCodeAt(0)),
+        encoded
+      );
+      if (!isValid) {
+        toast.error("❌ Firma no válida con llave pública.");
+        return;
       }
     }
+  }
 
     if (isGroup) {
       const groupId = parseInt(selectedUserId.split("group-")[1])
+
+      // 1) Recupera la clave del grupo
       const groupKeyBase64 = localStorage.getItem(`k_group_${groupId}`)
       if (!groupKeyBase64) {
         toast.error("🔐 No se encontró la clave del grupo.")
         return
       }
+      console.log("🧪 Clave base64 del grupo:", groupKeyBase64)
 
-      console.log(
-        "🧪 Clave base64 del grupo:",
-        localStorage.getItem(`k_group_${groupId}`)
-      )
-
-      if (
-        !groupKeyBase64 ||
-        typeof groupKeyBase64 !== "string" ||
-        groupKeyBase64.trim() === ""
-      ) {
-        console.error(
-          "⚠️ groupKeyBase64 está vacío o malformado:",
-          groupKeyBase64
-        )
+      // 2) Valida que la cadena no esté vacía o malformada
+      if (typeof groupKeyBase64 !== "string" || !groupKeyBase64.trim()) {
+        console.error("⚠️ groupKeyBase64 está vacío o malformado:", groupKeyBase64)
         toast.error("⚠️ No se encontró una clave válida para este grupo.")
         return
       }
 
+      // 3) Decodifica a Uint8Array
       const groupKey = Uint8Array.from(atob(groupKeyBase64), (c) =>
         c.charCodeAt(0)
       )
 
+      // 4) Cifra el mensaje
       const plaintextBytes = new TextEncoder().encode(content)
       const encryptedContent = await encryptAESGCM(plaintextBytes, groupKey)
 
+      // 5) Envíalo y actualiza la UI
       sendGroupSocketMessage(groupId, encryptedContent, signature)
       setMessages((prev) => [
         ...prev,
@@ -297,18 +357,26 @@ const Messages = () => {
           groupId,
           fromUserId,
           content: encryptedContent,
-          decryptedContent: content, // 👈 esta es la línea que hace que se vea el mensaje descifrado
+          decryptedContent: content, // para mostrar tu propio mensaje descifrado
           incoming: false,
           createdAt: new Date().toISOString(),
           id: crypto.randomUUID(),
         },
       ])
-    } else {
+  } else {
       try {
-        const publicKey = await getPublicEncryptKeyByUserId(selectedUserId)
-        const encrypted = await encryptWithPublicKey(publicKey, content)
-
         sendMessage(selectedUserId, encrypted, signature)
+
+        // Evaluar la firma incluso en mensajes enviados
+        const encoded = new TextEncoder().encode(encrypted)
+        const sigValid = signature
+          ? await window.crypto.subtle.verify(
+              { name: "RSASSA-PKCS1-v1_5" },
+              publicSigningKeyRef.current,
+              Uint8Array.from(atob(signature), (c) => c.charCodeAt(0)),
+              encoded
+            )
+          : false
 
         setMessages((prev) => [
           ...prev,
@@ -317,6 +385,7 @@ const Messages = () => {
             toUserId: selectedUserId,
             content: encrypted,
             signature,
+            signatureValid: sigValid,
             incoming: false,
             createdAt: new Date().toISOString(),
             id: crypto.randomUUID(),
@@ -510,7 +579,6 @@ const Messages = () => {
                     toast.warning("🔏 Clave de firma eliminada.")
                     setPrivateSigningKey(null)
                   } else {
-                    toast.success("🔏 Clave de firma importada correctamente.")
                     const keyData = atob(key.replace(/-----[^-]+-----|\n/g, ""))
                     const keyBuffer = new Uint8Array(
                       [...keyData].map((char) => char.charCodeAt(0))
@@ -550,9 +618,11 @@ const Messages = () => {
                       })
                       .then((publicKey) => {
                         publicSigningKeyRef.current = publicKey
+
                         toast.success(
                           "🗝️ Llave pública para verificar cargada."
                         )
+
                       })
                       .catch((err) => {
                         console.error(
@@ -603,15 +673,31 @@ const Messages = () => {
                           }`}>
                           {msg.fromUserId === getUserIdFromToken()
                             ? "You"
-                            : users.find((u) => u.id === msg.fromUserId)
-                                ?.name || "Unknown"}
+                            : users.find((u) => u.id === msg.fromUserId)?.name || "Unknown"}
                         </div>
-                      )}
-                    {
+                    )}
+                    {(
+                      // Si es mensaje entrante: descifrado o contenido crudo;
+                      // si es saliente: sólo mostramos lo que descifraste
                       msg.incoming
-                        ? msg.decryptedContent || msg.content // Si lo recibiste, intenta descifrar
-                        : msg.decryptedContent // Si tú lo enviaste, solo muestra descifrado
-                    }
+                        ? msg.decryptedContent || msg.content
+                        : msg.decryptedContent
+                    ).replace(/✎$/, "")}
+
+                    {msg.incoming && msg.decryptedContent?.endsWith("✎") && (
+                      <FontAwesomeIcon
+                        icon={faCheck}
+                        style={{ color: "#63E6BE", marginLeft: "8px" }}
+                        title="Mensaje firmado"
+                      />
+                    )}
+                    {msg.incoming && !msg.decryptedContent?.endsWith("✎") && (
+                      <FontAwesomeIcon
+                        icon={faCheck}
+                        style={{ color: "#ff2600", marginLeft: "8px" }}
+                        title="Sin firma"
+                      />
+                    )}
                   </div>
                 ))}
               <div ref={messagesEndRef} />
