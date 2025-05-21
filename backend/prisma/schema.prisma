@@ -50,6 +50,8 @@ model Message {
 
   content   String
   createdAt DateTime @default(now())
+
+  blockchainBlock BlockchainBlock?
 }
 
 model Group {
@@ -84,4 +86,14 @@ model GroupKeyDelivery {
   opkHash     String? @db.Text
 
   @@unique([groupId, userId])
+}
+
+
+model BlockchainBlock {
+  id           Int      @id @default(autoincrement())
+  previousHash String
+  currentHash  String   @unique
+  messageId    Int      @unique
+  message      Message  @relation(fields: [messageId], references: [id])
+  createdAt    DateTime @default(now())
 }

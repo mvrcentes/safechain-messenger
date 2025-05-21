@@ -1,5 +1,6 @@
 import chalk from "chalk"
 import prisma from "../database.js"
+import { createBlockchainEntry } from "../controllers/blockchain/blockchain.controller.js"
 
 const clients = new Map()
 
@@ -22,12 +23,17 @@ export function setupWebSocket(wss) {
           const { to, from, content } = msg
 
           const savedMessage = await prisma.message.create({
+            
             data: {
               fromUserId: from,
               toUserId: to,
               content,
             },
           })
+          createBlockchainEntry(savedMessage.id, content).catch((err) =>
+            console.error("❌ Error registrando en blockchain:", err)
+          )
+
 
           const recipient = clients.get(to)
 
@@ -55,6 +61,10 @@ export function setupWebSocket(wss) {
               content,
             },
           })
+          createBlockchainEntry(savedMessage.id, content).catch((err) =>
+            console.error("❌ Error registrando en blockchain (grupo):", err)
+          )
+          
 
           const group = await prisma.group.findUnique({
             where: { id: groupId },
