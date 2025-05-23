@@ -38,8 +38,8 @@ const Login = ({ prefilledEmail = "" }) => {
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: prefilledEmail || "test@test.com",
-      password: "12345678",
+      email: prefilledEmail || "",
+      password: "",
     },
   })
 

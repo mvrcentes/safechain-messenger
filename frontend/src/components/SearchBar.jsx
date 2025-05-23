@@ -1,5 +1,5 @@
 import React from "react"
-import { Input } from "@/components/ui/Input"
+import { Input } from "@/components/ui/input"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 import { faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons"
 

@@ -12,7 +12,7 @@ import userRoutes from "./routes/user.routes.js"
 const app = express()
 
 const corsOptions = {
-  origin: "http://localhost:5173",
+  origin: `http://localhost:${process.env.FRONTEND_LOCAL_PORT || 5173}`,
   credentials: true,
 }
 
