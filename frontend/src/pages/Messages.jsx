@@ -243,9 +243,12 @@ const Messages = () => {
       })
       .catch((err) => console.error("❌ Error fetching users:", err))
 
+    // Fetch groups as well at mount
     getUserGroups()
       .then(setGroups)
-      .catch((err) => console.error("❌ Error fetching groups:", err))
+      .catch((err) =>
+        console.error("❌ Error cargando grupos en el inicio:", err)
+      )
 
     return () => disconnectSocket()
   }, [])
@@ -540,7 +543,12 @@ const Messages = () => {
       <div className="w-[300px] bg-muted/20 backdrop-blur-sm border border-border text-muted-foreground p-4 rounded-xl flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Inbox</h2>
-          <GroupDropdown />
+          <GroupDropdown
+            onGroupCreated={() => {
+              console.log("🔁 Grupo creado, refrescando página...")
+              window.location.reload()
+            }}
+          />
         </div>
 
         {users.length > 0 && (

@@ -16,7 +16,7 @@ import { toast } from "sonner"
 import { MultiFileDropzone } from "@/components/MultiFileDropZone"
 import { getPreKeysByUserId } from "@/api/keys/keys"
 
-export default function GroupDropdown() {
+export default function GroupDropdown({ onGroupCreated }) {
   const [open, setOpen] = useState(false)
   const [users, setUsers] = useState([])
   const [selectedUsers, setSelectedUsers] = useState([])
@@ -97,6 +97,7 @@ export default function GroupDropdown() {
       })
 
       toast.success(`Group "${groupName}" created successfully`)
+      if (onGroupCreated) onGroupCreated()
       setOpen(false)
       setGroupName("")
       setSelectedUsers([])
