@@ -49,6 +49,7 @@ model Message {
   groupId Int?
 
   content   String
+  signature String?  @db.Text
   createdAt DateTime @default(now())
 
   blockchainBlock BlockchainBlock?

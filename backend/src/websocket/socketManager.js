@@ -20,14 +20,14 @@ export function setupWebSocket(wss) {
         }
 
         if (msg.type === "message") {
-          const { to, from, content } = msg
+          const { to, from, content, signature } = msg
 
           const savedMessage = await prisma.message.create({
-            
             data: {
               fromUserId: from,
               toUserId: to,
               content,
+              signature, // ⬅️ Aquí se guarda la firma
             },
           })
           createBlockchainEntry(savedMessage.id, content).catch((err) =>
@@ -44,6 +44,7 @@ export function setupWebSocket(wss) {
                 fromUserId: from,
                 toUserId: to,
                 content,
+                signature, // ⬅️ Incluida aquí
                 id: savedMessage.id,
                 createdAt: savedMessage.createdAt,
               })

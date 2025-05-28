@@ -710,18 +710,18 @@ const Messages = () => {
                       return raw.replace(/✎$/, "")
                     })()}
 
-                    {msg.incoming && msg.decryptedContent?.endsWith("✎") && (
+                    {!msg.groupId && msg.incoming && msg.signatureValid && (
                       <FontAwesomeIcon
                         icon={faCheck}
                         style={{ color: "#63E6BE", marginLeft: "8px" }}
-                        title="Mensaje firmado"
+                        title="Mensaje firmado y verificado"
                       />
                     )}
-                    {msg.incoming && !msg.decryptedContent?.endsWith("✎") && (
+                    {!msg.groupId && msg.incoming && msg.signatureValid === false && (
                       <FontAwesomeIcon
                         icon={faCheck}
                         style={{ color: "#ff2600", marginLeft: "8px" }}
-                        title="Sin firma"
+                        title="Firma ausente o inválida"
                       />
                     )}
                   </div>
