@@ -70,7 +70,14 @@ export const logout = async (req, res) => {
 
 export const login = async (req, res) => {
   const { email, password } = req.body
+
   try {
+    // Validate password length (server-side) - requirement: minimum 8 characters
+    if (!password || typeof password !== 'string' || password.length < 8) {
+      console.log(chalk.yellow('⚠️ Login attempt with short or invalid password'))
+      return res.status(400).json({ error: 'Password must be at least 8 characters' })
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
       select: {
@@ -83,20 +90,20 @@ export const login = async (req, res) => {
     })
 
     if (!user) {
-      console.log(chalk.red("❌ Login failed - User not found"))
-      return res.status(404).json({ error: "User not found" })
+      console.log(chalk.red('❌ Login failed - User not found'))
+      return res.status(404).json({ error: 'User not found' })
     }
 
     const valid = await argon2.verify(user.passwordHash, password)
     if (!valid) {
-      console.log(chalk.red("❌ Login failed - Incorrect password"))
-      return res.status(401).json({ error: "Incorrect password" })
+      console.log(chalk.red('❌ Login failed - Incorrect password'))
+      return res.status(401).json({ error: 'Incorrect password' })
     }
 
     if (user.mfaSecret) {
-      console.log(chalk.yellow("🔐 MFA required for user:"), user.email)
+      console.log(chalk.yellow('🔐 MFA required for user:'), user.email)
       return res.status(206).json({
-        message: "MFA required",
+        message: 'MFA required',
         mfaRequired: true,
       })
     }
@@ -116,25 +123,25 @@ export const login = async (req, res) => {
       data: {
         token: refreshToken,
         userId: user.id,
-        expiresAt: dayjs().add(7, "day").toDate(),
+        expiresAt: dayjs().add(7, 'day').toDate(),
       },
     })
 
-    const serialized = serialize("refreshToken", refreshToken, {
+    const serialized = serialize('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60, // en segundos
     })
 
-    res.setHeader("Set-Cookie", serialized)
+    res.setHeader('Set-Cookie', serialized)
 
-    console.log(chalk.green("✅ Login successful for:"), user.email)
+    console.log(chalk.green('✅ Login successful for:'), user.email)
     res.json({ token: accessToken })
   } catch (err) {
-    console.error(chalk.red("❌ Login error:"), err)
-    res.status(500).json({ error: "Login error" })
+    console.error(chalk.red('❌ Login error:'), err)
+    res.status(500).json({ error: 'Login error' })
   }
 }
 
