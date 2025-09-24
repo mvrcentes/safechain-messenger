@@ -1,6 +1,7 @@
 import chalk from "chalk"
 import prisma from "../database.js"
 import { createBlockchainEntry } from "../controllers/blockchain/blockchain.controller.js"
+import sanitizeHtml from "sanitize-html"
 
 const clients = new Map()
 
@@ -19,78 +20,96 @@ export function setupWebSocket(wss) {
           return
         }
 
+        // Single direct message
         if (msg.type === "message") {
           const { to, from, content } = msg
 
+          // Sanitize incoming message content to prevent XSS
+          const cleanContent = sanitizeHtml(content || "", {
+            allowedTags: [],         // strip all HTML tags
+            allowedAttributes: {},   // no attributes allowed
+          })
+
           const savedMessage = await prisma.message.create({
-            
             data: {
               fromUserId: from,
               toUserId: to,
-              content,
+              content: cleanContent,
             },
           })
-          createBlockchainEntry(savedMessage.id, content).catch((err) =>
+
+          createBlockchainEntry(savedMessage.id, cleanContent).catch((err) =>
             console.error("❌ Error registrando en blockchain:", err)
           )
 
-
           const recipient = clients.get(to)
-
           if (recipient) {
             recipient.send(
               JSON.stringify({
                 type: "message",
                 fromUserId: from,
                 toUserId: to,
-                content,
+                content: cleanContent,
                 id: savedMessage.id,
                 createdAt: savedMessage.createdAt,
               })
             )
           }
+          return
         }
 
+        // Group message
         if (msg.type === "group-message") {
           const { from, groupId, content } = msg
+
+          // Sanitize group message content
+          const cleanContent = sanitizeHtml(content || "", {
+            allowedTags: [],
+            allowedAttributes: {},
+          })
 
           const savedMessage = await prisma.message.create({
             data: {
               fromUserId: from,
               groupId,
-              content,
+              content: cleanContent,
             },
           })
-          createBlockchainEntry(savedMessage.id, content).catch((err) =>
+
+          createBlockchainEntry(savedMessage.id, cleanContent).catch((err) =>
             console.error("❌ Error registrando en blockchain (grupo):", err)
           )
-          
 
           const group = await prisma.group.findUnique({
             where: { id: groupId },
             include: { members: true },
           })
 
-          for (const member of group.members) {
-            const client = clients.get(member.id)
-            if (client) {
-              client.send(
-                JSON.stringify({
-                  type: "group-message",
-                  fromUserId: from,
-                  groupId,
-                  content,
-                  id: savedMessage.id,
-                  createdAt: savedMessage.createdAt,
-                })
-              )
+          if (group && Array.isArray(group.members)) {
+            for (const member of group.members) {
+              const client = clients.get(member.id)
+              if (client) {
+                client.send(
+                  JSON.stringify({
+                    type: "group-message",
+                    fromUserId: from,
+                    groupId,
+                    content: cleanContent,
+                    id: savedMessage.id,
+                    createdAt: savedMessage.createdAt,
+                  })
+                )
+              }
             }
           }
+          return
         }
 
+        // Disconnect message (optional)
         if (msg.type === "disconnect") {
           clients.delete(msg.userId)
           console.log(chalk.gray(`👋 Disconnected client: ${msg.userId}`))
+          return
         }
       } catch (error) {
         console.error(chalk.red("❌ Error handling message:"), error)

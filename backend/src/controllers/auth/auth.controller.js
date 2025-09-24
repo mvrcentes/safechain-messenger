@@ -90,14 +90,16 @@ export const login = async (req, res) => {
     })
 
     if (!user) {
-      console.log(chalk.red('❌ Login failed - User not found'))
-      return res.status(404).json({ error: 'User not found' })
+      // Do not reveal whether the email exists
+      console.log(chalk.red('❌ Login failed - Invalid credentials (user not found)'))
+      return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     const valid = await argon2.verify(user.passwordHash, password)
     if (!valid) {
-      console.log(chalk.red('❌ Login failed - Incorrect password'))
-      return res.status(401).json({ error: 'Incorrect password' })
+      // Do not reveal whether the password was wrong
+      console.log(chalk.red('❌ Login failed - Invalid credentials (bad password)'))
+      return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     if (user.mfaSecret) {
