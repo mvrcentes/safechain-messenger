@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
@@ -35,6 +35,9 @@ const Login = ({ prefilledEmail = "" }) => {
   const [mfaEmail, setMfaEmail] = useState("")
   const navigate = useNavigate()
 
+  const [cooldownUntil, setCooldownUntil] = useState(null) // timestamp (ms)
+  const [cooldownLeft, setCooldownLeft] = useState(0)
+
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -69,8 +72,48 @@ const Login = ({ prefilledEmail = "" }) => {
       toast.success("Login successful!")
     } catch (error) {
       console.error("❌ Login error:", error)
-      const message = error.response?.data?.error
+      const status = error?.response?.status
+      const message = error?.response?.data?.error
 
+      if (status === 429) {
+        // Leer Retry-After (segundos) si viene del backend
+        const retryAfterHeader = error.response.headers?.["retry-after"]
+        let seconds = parseInt(retryAfterHeader, 10)
+
+        // Alternativa: RateLimit-Reset (timestamp en segundos, depende del proxy)
+        if (!seconds) {
+          const rlReset = error.response.headers?.["ratelimit-reset"]
+          if (rlReset) {
+            const resetMs = parseInt(rlReset, 10) * 1000
+            seconds = Math.max(0, Math.ceil((resetMs - Date.now()) / 1000))
+          }
+        }
+
+        // Fallback si no hay headers
+        if (!seconds || Number.isNaN(seconds)) seconds = 60
+
+        setCooldownUntil(Date.now() + seconds * 1000)
+        toast.error(message || `Too many attempts. Try again in ${seconds}s`)
+        return
+      }
+
+      // Política actual en backend:
+      // 400 -> password < 8
+      if (
+        status === 400 &&
+        message === "Password must be at least 8 characters"
+      ) {
+        toast.error("Password must be at least 8 characters")
+        return
+      }
+
+      // 401 -> mensaje genérico
+      if (status === 401 && message === "Invalid credentials") {
+        toast.error("Invalid credentials")
+        return
+      }
+
+      // Compatibilidad con mensajes antiguos (por si algo queda en el cliente)
       if (message === "User not found") {
         toast.error("❌ Email not registered")
       } else if (message === "Incorrect password") {
@@ -90,6 +133,19 @@ const Login = ({ prefilledEmail = "" }) => {
       toast.error("❌ Invalid MFA code: " + error.response?.data?.error)
     }
   }
+
+  useEffect(() => {
+    if (!cooldownUntil) return
+    const id = setInterval(() => {
+      const left = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000))
+      setCooldownLeft(left)
+      if (left <= 0) {
+        setCooldownUntil(null)
+        clearInterval(id)
+      }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [cooldownUntil])
 
   return (
     <Form {...form}>
@@ -122,8 +178,8 @@ const Login = ({ prefilledEmail = "" }) => {
           )}
         />
 
-        <Button type="submit" className="ml-0">
-          Login
+        <Button type="submit" className="ml-0" disabled={!!cooldownUntil}>
+          {cooldownUntil ? `Try again in ${cooldownLeft}s` : "Login"}
         </Button>
       </form>
       {mfaStage && (

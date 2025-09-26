@@ -7,6 +7,7 @@ import speakeasy from "speakeasy"
 import { v4 as uuidv4 } from "uuid"
 
 import prisma from "../../database.js"
+import { recordFailedLoginAttempt, resetFailedLoginAttempts } from "../../middleware/loginAttempts.js"
 
 const JWT_SECRET = process.env.JWT_SECRET
 const JWT_EXPIRATION = process.env.JWT_EXPIRATION || "15m"
@@ -92,6 +93,7 @@ export const login = async (req, res) => {
     if (!user) {
       // Do not reveal whether the email exists
       console.log(chalk.red('❌ Login failed - Invalid credentials (user not found)'))
+      await recordFailedLoginAttempt(email)
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
@@ -99,6 +101,7 @@ export const login = async (req, res) => {
     if (!valid) {
       // Do not reveal whether the password was wrong
       console.log(chalk.red('❌ Login failed - Invalid credentials (bad password)'))
+      await recordFailedLoginAttempt(email)
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
@@ -140,6 +143,7 @@ export const login = async (req, res) => {
     res.setHeader('Set-Cookie', serialized)
 
     console.log(chalk.green('✅ Login successful for:'), user.email)
+    await resetFailedLoginAttempts(email)
     res.json({ token: accessToken })
   } catch (err) {
     console.error(chalk.red('❌ Login error:'), err)
