@@ -165,7 +165,7 @@ const Messages = () => {
       const incoming = data.fromUserId !== currentUserId
       // Skip socket echo for any messages we sent ourselves
       if (!incoming) {
-        return;
+        return
       }
 
       // --- Signature verification logic ---
@@ -713,14 +713,14 @@ const Messages = () => {
                     {msg.incoming && msg.decryptedContent?.endsWith("✎") && (
                       <FontAwesomeIcon
                         icon={faCheck}
-                        style={{ color: "#63E6BE", marginLeft: "8px" }}
+                        className="text-emerald-400 ml-2"
                         title="Mensaje firmado"
                       />
                     )}
                     {msg.incoming && !msg.decryptedContent?.endsWith("✎") && (
                       <FontAwesomeIcon
                         icon={faCheck}
-                        style={{ color: "#ff2600", marginLeft: "8px" }}
+                        className="text-red-600 ml-2"
                         title="Sin firma"
                       />
                     )}
