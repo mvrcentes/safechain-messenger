@@ -5,8 +5,6 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig, loadEnv } from "vite"
 import path, { dirname } from "path"
 import fs from "fs"
-import crypto from "node:crypto"
-import { Buffer } from "buffer"
 import { fileURLToPath } from "url"
 import { Buffer } from "buffer"
 
@@ -17,21 +15,26 @@ const __dirname = dirname(__filename)
 // 1) Cabeceras de seguridad (dinámicas por entorno)
 // ───────────────────────────────────────────────────────────────────────────────
 function buildSecurityHeaders({ isDev, useHttps }) {
-  const csp = [
+  const cspDirectives = [
     "default-src 'self'",
     "script-src 'self' 'nonce-__CSP_NONCE__'",
     // En dev Vite inyecta <style> inline (HMR) → permitimos inline SOLO en dev
     isDev ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
+    // Conexiones: HMR necesita ws/wss en dev; 'self' cubre http(s) al mismo origen
     "connect-src 'self' ws: wss:",
     "frame-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",
     "object-src 'none'",
-    "upgrade-insecure-requests",
-  ].join("; ")
+    // ⚠️ Solo forzamos upgrade a HTTPS cuando realmente usamos HTTPS,
+    // de lo contrario el navegador intentará ir a https:// y fallará el TLS.
+    ...(useHttps ? ["upgrade-insecure-requests"] : []),
+  ]
+
+  const csp = cspDirectives.join("; ")
 
   const headers = {
     "Content-Security-Policy": csp,
@@ -61,10 +64,42 @@ function securityHeadersPlugin(headers) {
         for (const [k, v] of Object.entries(headers)) res.setHeader(k, v)
         next()
       })
+      // Sirve robots.txt y sitemap.xml minimalistas para silenciar el scanner en dev
+      server.middlewares.use((req, res, next) => {
+        if (req.url === "/robots.txt") {
+          res.statusCode = 200
+          res.setHeader("Content-Type", "text/plain; charset=utf-8")
+          res.end("User-agent: *\nDisallow: /")
+          return
+        }
+        if (req.url === "/sitemap.xml") {
+          res.statusCode = 200
+          res.setHeader("Content-Type", "application/xml; charset=utf-8")
+          res.end(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`)
+          return
+        }
+        next()
+      })
     },
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         for (const [k, v] of Object.entries(headers)) res.setHeader(k, v)
+        next()
+      })
+      // Sirve robots.txt y sitemap.xml minimalistas para silenciar el scanner en dev
+      server.middlewares.use((req, res, next) => {
+        if (req.url === "/robots.txt") {
+          res.statusCode = 200
+          res.setHeader("Content-Type", "text/plain; charset=utf-8")
+          res.end("User-agent: *\nDisallow: /")
+          return
+        }
+        if (req.url === "/sitemap.xml") {
+          res.statusCode = 200
+          res.setHeader("Content-Type", "application/xml; charset=utf-8")
+          res.end(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`)
+          return
+        }
         next()
       })
     },
@@ -144,14 +179,14 @@ export default defineConfig(({ mode }) => {
     server: {
       host: "0.0.0.0",
       port: DEV_PORT,
-      https: httpsConfig,
+      https: httpsConfig, // dejar en false si no tienes cert confiable
       // Si quieres evitar CORS en dev, activa el proxy al backend:
       // proxy: { "/api": { target: "http://localhost:4000", changeOrigin: true } },
     },
 
     preview: {
       port: 5173,
-      https: httpsConfig,
+      https: httpsConfig, // dejar en false si no tienes cert confiable
     },
 
     build: {
