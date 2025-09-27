@@ -1,65 +1,87 @@
 // vite.config.js
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import { defineConfig } from "vite"
+import { defineConfig, loadEnv } from "vite"
 import path, { dirname } from "path"
+import fs from "fs"
 import { fileURLToPath } from "url"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const DEV_PORT = Number(import.meta.env.FRONTEND_LOCAL_PORT || 5173)
+// 🔌 Middleware para añadir SIEMPRE las cabeceras (cubre HMR, /@vite/*, assets, etc.)
+function securityHeadersPlugin(headers) {
+  return {
+    name: "security-headers",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        for (const [k, v] of Object.entries(headers)) res.setHeader(k, v)
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        for (const [k, v] of Object.entries(headers)) res.setHeader(k, v)
+        next()
+      })
+    },
+  }
+}
 
-// 🔒 Cabeceras de seguridad que Vite enviará en dev (y preview)
-const securityHeaders = {
-  // CSP mínima segura para dev con HMR (ws/wss)
+// ⚙️ Cabeceras objetivo del escáner
+const baseSecurityHeaders = {
+  // CSP apta para dev con HMR (ws/wss)
   "Content-Security-Policy":
-    "default-src 'self'; connect-src 'self' ws: wss:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
-  // Anti-clickjacking
+    "default-src 'self'; connect-src 'self' ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
   "X-Frame-Options": "DENY",
-  // No sniff
   "X-Content-Type-Options": "nosniff",
-  // Referer estricto
   "Referrer-Policy": "no-referrer",
-  // Permissions-Policy (sustituye a Feature-Policy)
   "Permissions-Policy": "geolocation=(), microphone=(), camera=(), autoplay=(self)",
-  // Aislamiento de contexto (opcionales según tu app)
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
   "Cross-Origin-Resource-Policy": "same-site",
-  // ⚠️ HSTS solo tiene efecto en HTTPS real; si activas https en dev, descomenta:
-  // "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, "")
+  const DEV_PORT = Number(env.FRONTEND_LOCAL_PORT || 5173)
 
-  resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },
-  },
+  const useHttps = env.HTTPS_DEV === "1" // pon HTTPS_DEV=1 en tu .env si quieres HTTPS local
+  const httpsConfig = useHttps
+    ? {
+      key: fs.readFileSync(env.SSL_KEY_PATH || "certs/localhost-key.pem"),
+      cert: fs.readFileSync(env.SSL_CERT_PATH || "certs/localhost-cert.pem"),
+    }
+    : false
 
-  server: {
-    host: "0.0.0.0",
-    port: DEV_PORT,
-    // strictPort: true, // opcional si no quieres que cambie de puerto
-    https: false, // pon true solo si tienes cert/key locales
-    headers: securityHeaders,
+  // Añade HSTS SOLO si servimos por HTTPS (ZAP lo exige en HTTPS)
+  const securityHeaders = {
+    ...baseSecurityHeaders,
+    ...(useHttps
+      ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload" }
+      : {}),
+  }
 
-    // proxy: {
-    //   "/api": {
-    //     target: "http://localhost:5000",
-    //     changeOrigin: true,
-    //   },
-    // },
-  },
+  return {
+    plugins: [react(), tailwindcss(), securityHeadersPlugin(securityHeaders)],
+    resolve: { alias: { "@": path.resolve(__dirname, "src") } },
 
-  // Cuando uses `vite preview` para revisar el build, aplica las mismas cabeceras
-  preview: {
-    port: 5173,
-    headers: securityHeaders,
-  },
+    server: {
+      host: "0.0.0.0",
+      port: DEV_PORT,
+      https: httpsConfig,
+      // `headers` ya no es necesario, el plugin los inyecta globalmente
+      // Si haces proxy al backend, puedes evitar CORS en dev:
+      // proxy: { "/api": { target: "http://localhost:5000", changeOrigin: true } },
+    },
 
-  build: {
-    sourcemap: false, // evita fuga de info en prod/previews
-  },
+    preview: {
+      port: 5173,
+      https: httpsConfig,
+    },
+
+    build: {
+      sourcemap: false, // evita disclosure por source maps en pruebas
+    },
+  }
 })
