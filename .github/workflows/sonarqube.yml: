@@ -1,5 +1,16 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
 jobs:
-  Sonarqube-Analysis:
+  sonarqube-analysis:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -7,22 +18,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # (Opcional) Instala toolchain si aplica: Node/Java/etc.
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+
       - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v2
-        continue-on-error: false
+        uses: SonarSource/sonarqube-scan-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >-
             -Dsonar.projectKey=CI-CD-githubactions
             -Dsonar.sources=.
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/.git/**
+            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**"
             -Dsonar.verbose=true
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: SonarQube Quality Gate check
-        uses: sonarsource/sonarqube-quality-gate-action@master
-        timeout-minutes: 5
+        if: ${{ always() }}
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
