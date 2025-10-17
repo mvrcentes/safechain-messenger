@@ -32,6 +32,7 @@ jobs:
         with:
           args: >-
             -Dsonar.projectKey=CI-CD-githubactions
+            -Dsonar.projectName=CI-CD-githubactions
             -Dsonar.sources=.
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**"
             -Dsonar.verbose=true
