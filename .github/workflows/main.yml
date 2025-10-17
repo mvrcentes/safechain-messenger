@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   sonarqube-analysis:
-    runs-on: self-hosted
+    # Use a Linux self-hosted runner since SonarQube scan action requires Linux containers.
+    runs-on: [self-hosted, linux]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
