@@ -94,3 +94,4 @@ app.use("/api/group", groupRoutes)
 app.use("/api/keys", keysRoutes)
 
 export default app
+
