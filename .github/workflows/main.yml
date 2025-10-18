@@ -25,11 +25,13 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # en tu VM: http://localhost:9000
           SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
         run: |
+          set -euo pipefail
+          docker pull sonarsource/sonar-scanner-cli:latest
           docker run --rm --network host \
             -e SONAR_HOST_URL="$SONAR_HOST_URL" \
             -e SONAR_LOGIN="$SONAR_TOKEN" \
             -v "$(pwd):/usr/src" \
-            sonarsource/sonar-scanner-cli:5.0.1.3006 \
+            sonarsource/sonar-scanner-cli:latest \
             -Dsonar.projectKey=CI-CD-githubactions \
             -Dsonar.projectName=CI-CD-githubactions \
             -Dsonar.sources=. \
