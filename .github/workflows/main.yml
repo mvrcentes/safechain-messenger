@@ -25,7 +25,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # en tu VM: http://localhost:9000
           SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
         run: |
-          docker run --rm \
+          docker run --rm --network host \
             -e SONAR_HOST_URL="$SONAR_HOST_URL" \
             -e SONAR_LOGIN="$SONAR_TOKEN" \
             -v "$(pwd):/usr/src" \
@@ -37,7 +37,7 @@ jobs:
             -Dsonar.verbose=true
 
       - name: SonarQube Quality Gate check
-        if: ${{ always() }}
+        if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 10
         env:
