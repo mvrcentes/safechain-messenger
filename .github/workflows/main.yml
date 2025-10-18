@@ -19,6 +19,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Wait for SonarQube to be ready
+        run: |
+          echo "Waiting for SonarQube to be ready..."
+          for i in {1..30}; do
+            status=$(curl -s http://localhost:9000/api/system/status | jq -r '.status' || echo "DOWN")
+            echo "Status: $status"
+            if [ "$status" = "UP" ]; then
+              echo "SonarQube is ready!"
+              break
+            fi
+            sleep 10
+          done
       - name: SonarQube Scan (Docker)
         id: sonar_scan
         env:
@@ -28,6 +40,8 @@ jobs:
           set -euo pipefail
           docker pull sonarsource/sonar-scanner-cli:latest
           docker run --rm --network host \
+            -w /usr/src \
+            --user $(id -u):$(id -g) \
             -e SONAR_HOST_URL="$SONAR_HOST_URL" \
             -e SONAR_TOKEN="$SONAR_TOKEN" \
             -v "$(pwd):/usr/src" \
@@ -39,6 +53,12 @@ jobs:
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.verbose=true
+      - name: Debug report-task
+        run: |
+          echo "Listing .scannerwork:"
+          ls -la .scannerwork || true
+          echo "Show report-task.txt if present:"
+          test -f .scannerwork/report-task.txt && cat .scannerwork/report-task.txt || echo "report-task.txt not found"
       - name: SonarQube Quality Gate check
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
