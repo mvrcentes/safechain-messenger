@@ -2,9 +2,9 @@ name: SonarQube Analysis
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
-    branches: ["**"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -13,23 +13,12 @@ permissions:
 jobs:
   sonarqube-analysis:
     # Use a macOS self-hosted runner.
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, linux]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # (Opcional) Instala toolchain si aplica: Node/Java/etc.
-      # - uses: actions/setup-node@v4
-      #   with:
-      #     node-version: '20'
-
-      - name: Install SonarScanner CLI (macOS)
-        run: |
-          brew install sonar-scanner || true
-          echo "SONAR_SCANNER_BIN=$(brew --prefix)/opt/sonar-scanner/bin/sonar-scanner" >> $GITHUB_ENV
-
       - name: SonarQube Scan (CLI)
         id: sonar_scan
         env:
