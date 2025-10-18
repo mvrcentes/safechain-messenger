@@ -39,7 +39,6 @@ jobs:
             -Dsonar.host.url="$SONAR_HOST_URL" \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.verbose=true
-
       - name: SonarQube Quality Gate check
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
