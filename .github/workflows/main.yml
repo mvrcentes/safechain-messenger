@@ -12,8 +12,8 @@ permissions:
 
 jobs:
   sonarqube-analysis:
-    # Use a Linux self-hosted runner since SonarQube scan action requires Linux containers.
-    runs-on: self-hosted
+    # Use a macOS self-hosted runner.
+    runs-on: [self-hosted, macOS]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,17 +25,24 @@ jobs:
       #   with:
       #     node-version: '20'
 
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v2
+      - name: Install SonarScanner CLI (macOS)
+        run: |
+          brew install sonar-scanner || true
+          echo "SONAR_SCANNER_BIN=$(brew --prefix)/opt/sonar-scanner/bin/sonar-scanner" >> $GITHUB_ENV
+
+      - name: SonarQube Scan (CLI)
+        id: sonar_scan
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          args: >-
-            -Dsonar.projectKey=CI-CD-githubactions
-            -Dsonar.projectName=CI-CD-githubactions
-            -Dsonar.sources=.
-            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**"
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          "$SONAR_SCANNER_BIN" \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.login="$SONAR_TOKEN" \
+            -Dsonar.projectKey=CI-CD-githubactions \
+            -Dsonar.projectName=CI-CD-githubactions \
+            -Dsonar.sources=. \
+            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**" \
             -Dsonar.verbose=true
 
       - name: SonarQube Quality Gate check
