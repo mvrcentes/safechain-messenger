@@ -38,7 +38,11 @@ jobs:
           SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
         run: |
           set -euo pipefail
-          docker pull sonarsource/sonar-scanner-cli:latest
+          # Ensure the scanner writes metadata into the repo workspace
+          rm -rf .scannerwork || true
+          mkdir -p .scannerwork
+          # Use cached image if present; otherwise pull
+          docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1 || docker pull sonarsource/sonar-scanner-cli:latest
           docker run --rm --network host \
             -w /usr/src \
             --user $(id -u):$(id -g) \
@@ -48,10 +52,11 @@ jobs:
             sonarsource/sonar-scanner-cli:latest \
             -Dsonar.projectKey=CI-CD-githubactions \
             -Dsonar.projectName=CI-CD-githubactions \
-            -Dsonar.sources=. \
-            -Dsonar.token="$SONAR_TOKEN" \
             -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.sources=. \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
+            -Dsonar.working.directory=/usr/src/.scannerwork \
             -Dsonar.verbose=true
       - name: Debug report-task
         run: |
@@ -62,6 +67,8 @@ jobs:
       - name: SonarQube Quality Gate check
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
         timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
