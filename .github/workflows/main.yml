@@ -10,60 +10,100 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: sonarqube-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   sonarqube-analysis:
-    # Use a macOS self-hosted runner.
+    # Self-hosted Linux runner; SonarQube is pre-running on the same VM.
     runs-on: [self-hosted, linux]
+    env:
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # e.g. http://localhost:9000
+      SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Wait for SonarQube to be ready
+
+      - name: Ensure jq is available (for status check)
+        shell: bash
         run: |
-          echo "Waiting for SonarQube to be ready..."
-          for i in {1..30}; do
-            status=$(curl -s http://localhost:9000/api/system/status | jq -r '.status' || echo "DOWN")
-            echo "Status: $status"
-            if [ "$status" = "UP" ]; then
-              echo "SonarQube is ready!"
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq not found; attempting install..."
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y jq
+            else
+              echo "Error: jq is required for the readiness check and could not be installed automatically." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Wait for SonarQube to be ready (fails if not UP)
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Waiting for SonarQube to be ready at: ${SONAR_HOST_URL}"
+          attempts=0
+          max_attempts=30
+          until [ $attempts -ge $max_attempts ]
+          do
+            status="$(curl -fsS --max-time 3 "${SONAR_HOST_URL}/api/system/status" | jq -r '.status' || echo DOWN)"
+            echo "Attempt $((attempts+1))/${max_attempts} -> status: ${status}"
+            if [ "${status}" = "UP" ]; then
+              echo "SonarQube is ready."
               break
             fi
+            attempts=$((attempts+1))
             sleep 10
           done
-      - name: SonarQube Scan (Docker)
+          if [ "${status}" != "UP" ]; then
+            echo "SonarQube did not become ready in time. Failing the job." >&2
+            exit 78
+          fi
+
+      - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # en tu VM: http://localhost:9000
-          SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           # Ensure the scanner writes metadata into the repo workspace
           rm -rf .scannerwork || true
           mkdir -p .scannerwork
-          # Use cached image if present; otherwise pull
-          docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1 || docker pull sonarsource/sonar-scanner-cli:latest
+
+          # Pull scanner if not present (does NOT run SonarQube server)
+          if ! docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1; then
+            docker pull sonarsource/sonar-scanner-cli:latest
+          fi
+
+          # Use host networking so the scanner can reach localhost:9000 on the runner
           docker run --rm --network host \
             -w /usr/src \
-            --user $(id -u):$(id -g) \
-            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
-            -e SONAR_TOKEN="$SONAR_TOKEN" \
+            --user "$(id -u):$(id -g)" \
+            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
+            -e SONAR_TOKEN="${SONAR_TOKEN}" \
             -v "$(pwd):/usr/src" \
             sonarsource/sonar-scanner-cli:latest \
-            -Dsonar.projectKey=CI-CD-githubactions \
-            -Dsonar.projectName=CI-CD-githubactions \
-            -Dsonar.host.url="$SONAR_HOST_URL" \
-            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.projectKey="${{ github.repository_owner }}_${{ github.event.repository.name }}" \
+            -Dsonar.projectName="${{ github.event.repository.name }}" \
+            -Dsonar.host.url="${SONAR_HOST_URL}" \
+            -Dsonar.token="${SONAR_TOKEN}" \
             -Dsonar.sources=. \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
             -Dsonar.verbose=true
+
       - name: Debug report-task
+        shell: bash
         run: |
           echo "Listing .scannerwork:"
           ls -la .scannerwork || true
           echo "Show report-task.txt if present:"
           test -f .scannerwork/report-task.txt && cat .scannerwork/report-task.txt || echo "report-task.txt not found"
+
       - name: SonarQube Quality Gate check
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
