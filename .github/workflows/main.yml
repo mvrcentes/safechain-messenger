@@ -155,7 +155,6 @@ jobs:
               --out /report \
               --failOnCVSS 11 \
               --disableNodeAudit \
-              --cveValidForHours 24 \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}"
           }
 
@@ -187,7 +186,6 @@ jobs:
               --out /report \
               --failOnCVSS 11 \
               --disableNodeAudit \
-              --cveValidForHours 24 \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
               --noupdate
             rc=$?
