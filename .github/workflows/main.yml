@@ -148,7 +148,7 @@ jobs:
             --format XML \
             --project "SafeChainMessenger" \
             --out /report \
-            --failOnCVSS 0 \
+            --failOnCVSS 11 \
             --disableNodeAudit \
             --nvdApiKey "${{ secrets.NVD_API_KEY }}"
 
