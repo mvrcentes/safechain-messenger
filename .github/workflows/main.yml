@@ -69,19 +69,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Cache for NVD database and output reports
+          # Prepare cache (NVD DB) and output directories
           mkdir -p odc-data dependency-report
-          # Analyze frontend and backend (adjust paths if only one exists)
+
+          # Build scan target list based on folders that actually exist in the repo
+          SCAN_ARGS=()
+          [ -d frontend ] && SCAN_ARGS+=(/src/frontend)
+          [ -d backend ] && SCAN_ARGS+=(/src/backend)
+
+          if [ ${#SCAN_ARGS[@]} -eq 0 ]; then
+            echo "No scanable directories found (expected 'frontend' and/or 'backend')." >&2
+            exit 1
+          fi
+
+          echo "Dependency-Check will scan: ${SCAN_ARGS[@]}"
+
           docker run --rm \
             -v "$(pwd):/src" \
             -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
             -v "$(pwd)/dependency-report:/report" \
             owasp/dependency-check:latest \
-            --scan /src/frontend /src/backend \
+            --scan ${SCAN_ARGS[@]} \
             --format XML \
             --project "SafeChainMessenger" \
             --out /report \
-            --failOnCVSS 0
+            --failOnCVSS 0 \
+            --nvdApiKey "${{ secrets.NVD_API_KEY }}"
 
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
