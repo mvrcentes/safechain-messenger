@@ -65,6 +65,24 @@ jobs:
             exit 78
           fi
 
+      - name: OWASP Dependency-Check (Docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Cache for NVD database and output reports
+          mkdir -p odc-data dependency-report
+          # Analyze frontend and backend (adjust paths if only one exists)
+          docker run --rm \
+            -v "$(pwd):/src" \
+            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+            -v "$(pwd)/dependency-report:/report" \
+            owasp/dependency-check:latest \
+            --scan /src/frontend /src/backend \
+            --format XML \
+            --project "SafeChainMessenger" \
+            --out /report \
+            --failOnCVSS 0
+
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
         shell: bash
@@ -94,6 +112,8 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
+            -Dsonar.dependencyCheck.reportPath=/usr/src/dependency-report/dependency-check-report.xml \
+            -Dsonar.dependencyCheck.htmlReportPath=/usr/src/dependency-report/dependency-check-report.html \
             -Dsonar.verbose=true
 
       - name: Debug report-task
