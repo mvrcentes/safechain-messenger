@@ -65,6 +65,28 @@ jobs:
             exit 78
           fi
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (frontend/backend) without running lifecycle scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d frontend ]; then
+            echo "Installing frontend deps..."
+            cd frontend
+            npm ci --ignore-scripts
+            cd - >/dev/null
+          fi
+          if [ -d backend ]; then
+            echo "Installing backend deps..."
+            cd backend
+            npm ci --ignore-scripts
+            cd - >/dev/null
+          fi
+
       - name: OWASP Dependency-Check (Docker)
         shell: bash
         run: |
@@ -94,6 +116,7 @@ jobs:
             --project "SafeChainMessenger" \
             --out /report \
             --failOnCVSS 0 \
+            --disableNodeAudit \
             --nvdApiKey "${{ secrets.NVD_API_KEY }}"
 
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
