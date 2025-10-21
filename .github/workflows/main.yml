@@ -139,18 +139,67 @@ jobs:
 
           echo "Dependency-Check will scan: ${SCAN_ARGS[@]}"
 
-          docker run --rm \
-            -v "$(pwd):/src" \
-            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-            -v "$(pwd)/dependency-report:/report" \
-            owasp/dependency-check:latest \
-            --scan ${SCAN_ARGS[@]} \
-            --format XML \
-            --project "SafeChainMessenger" \
-            --out /report \
-            --failOnCVSS 11 \
-            --disableNodeAudit \
-            --nvdApiKey "${{ secrets.NVD_API_KEY }}"
+          IMAGE_TAG=owasp/dependency-check:10.0.3
+          # Pull specific stable image tag to avoid regressions
+          docker image inspect "$IMAGE_TAG" >/dev/null 2>&1 || docker pull "$IMAGE_TAG"
+
+          run_odc() {
+            docker run --rm \
+              -v "$(pwd):/src" \
+              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              -v "$(pwd)/dependency-report:/report" \
+              "$IMAGE_TAG" \
+              --scan ${SCAN_ARGS[@]} \
+              --format XML \
+              --project "SafeChainMessenger" \
+              --out /report \
+              --failOnCVSS 11 \
+              --disableNodeAudit \
+              --cveValidForHours 24 \
+              --nvdApiKey "${{ secrets.NVD_API_KEY }}"
+          }
+
+          # Retry logic to mitigate transient NVD API issues
+          set +e
+          rc=0
+          for attempt in 1 2 3; do
+            echo "[ODC] Attempt ${attempt}/3"
+            run_odc
+            rc=$?
+            if [ $rc -eq 0 ]; then
+              echo "[ODC] Completed successfully"
+              break
+            fi
+            echo "[ODC] Attempt ${attempt} failed with rc=$rc. Sleeping 20s before retry..."
+            sleep 20
+          done
+
+          if [ $rc -ne 0 ]; then
+            echo "[ODC] Online update failed after retries. Trying offline run with cached DB (results may be stale)."
+            docker run --rm \
+              -v "$(pwd):/src" \
+              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              -v "$(pwd)/dependency-report:/report" \
+              "$IMAGE_TAG" \
+              --scan ${SCAN_ARGS[@]} \
+              --format XML \
+              --project "SafeChainMessenger" \
+              --out /report \
+              --failOnCVSS 11 \
+              --disableNodeAudit \
+              --cveValidForHours 24 \
+              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+              --noupdate
+            rc=$?
+          fi
+          set -e
+
+          if [ $rc -ne 0 ]; then
+            echo "[ODC] Failed to produce report even in offline mode. Exiting." >&2
+            exit $rc
+          fi
+
+          echo "[ODC] Report generated at dependency-report/dependency-check-report.xml"
 
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
