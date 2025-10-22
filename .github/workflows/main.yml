@@ -80,3 +80,23 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: OWASP Dependency Check Scan
+        run: |
+          set -euo pipefail
+          mkdir -p odc-data dependency-report
+          docker run --rm \
+            -v "$(pwd):/src" \
+            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+            -v "$(pwd)/dependency-report:/report" \
+            owasp/dependency-check:10.0.2 \
+            --scan /src \
+            --format ALL \
+            --project "SafeChainMessenger" \
+            --out /report \
+            --exclude "**/node_modules/**" \
+            --exclude "**/dist/**" \
+            --exclude "**/build/**" \
+            --disableNodeAudit \
+            --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+            --nvdApiDelay 12000
