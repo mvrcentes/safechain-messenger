@@ -70,6 +70,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p odc-data dependency-report
+          echo "[ODC] Prewarm local CVE database if empty..."
+          if [ -z "$(ls -A odc-data 2>/dev/null || true)" ]; then
+            echo "[ODC] odc-data/ is empty; creating DB (single attempt)."
+            docker run --rm \
+              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              owasp/dependency-check:10.0.2 \
+              --updateonly \
+              --nvdApiDelay 6000
+            echo "[ODC] Prewarm successful."
+          else
+            echo "[ODC] Reusing existing DB cache in odc-data/."
+          fi
           # Run OWASP Dependency-Check in Docker and generate XML+HTML reports into ./dependency-report
           docker run --rm \
             -v "$(pwd):/src" \
