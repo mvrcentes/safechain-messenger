@@ -65,6 +65,27 @@ jobs:
             exit 78
           fi
 
+      - name: OWASP Dependency Check (Docker)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p odc-data dependency-report
+          # Run OWASP Dependency-Check in Docker and generate XML+HTML reports into ./dependency-report
+          docker run --rm \
+            -v "$(pwd):/src" \
+            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+            -v "$(pwd)/dependency-report:/report" \
+            owasp/dependency-check:10.0.2 \
+            --scan /src \
+            --format ALL \
+            --project "SafeChainMessenger" \
+            --out /report \
+            --exclude "**/node_modules/**" \
+            --exclude "**/dist/**" \
+            --exclude "**/build/**" \
+            --disableNodeAudit \
+            --noupdate
+
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
         shell: bash
@@ -94,7 +115,9 @@ jobs:
             -Dsonar.sources=. \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
-            -Dsonar.verbose=true
+            -Dsonar.verbose=true \
+            -Dsonar.dependencyCheck.reportPath=/usr/src/dependency-report/dependency-check-report.xml \
+            -Dsonar.dependencyCheck.htmlReportPath=/usr/src/dependency-report/dependency-check-report.html
 
       - name: Debug report-task
         shell: bash
