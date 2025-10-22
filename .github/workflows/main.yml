@@ -163,6 +163,7 @@ jobs:
               -e NVD_API_KEY="${{ secrets.NVD_API_KEY }}" \
               "$IMAGE_TAG" \
               --updateonly \
+              --nvdApiDelay 6000 \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}"
             prewarm_rc=$?
             set -e
@@ -189,6 +190,7 @@ jobs:
               --log /report/odc.log \
               --failOnCVSS 11 \
               --disableNodeAudit \
+              --nvdApiDelay 6000 \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}"
           }
 
@@ -227,6 +229,7 @@ jobs:
               --log /report/odc.log \
               --failOnCVSS 11 \
               --disableNodeAudit \
+              --nvdApiDelay 6000 \
               --noupdate
             rc=$?
           fi
