@@ -120,6 +120,16 @@ jobs:
             install_node_deps backend
           fi
 
+      - name: Cache dependency-check DB
+        uses: actions/cache@v4
+        with:
+          path: odc-data
+          key: odc-db-${{ runner.os }}-${{ github.workflow }}-${{ github.ref_name }}
+          restore-keys: |
+            odc-db-${{ runner.os }}-${{ github.workflow }}-
+            odc-db-${{ runner.os }}-
+            odc-db-
+
       - name: OWASP Dependency-Check (Docker)
         shell: bash
         run: |
@@ -143,6 +153,27 @@ jobs:
           # Pull specific stable image tag to avoid regressions
           docker image inspect "$IMAGE_TAG" >/dev/null 2>&1 || docker pull "$IMAGE_TAG"
 
+          # ---- Pre-warm the NVD DB (update-only) with retries ----
+          prewarm_rc=0
+          for attempt in 1 2 3; do
+            echo "[ODC][prewarm] Attempt ${attempt}/3"
+            set +e
+            docker run --rm \
+              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              "$IMAGE_TAG" \
+              --updateonly \
+              --nvdApiKey "${{ secrets.NVD_API_KEY }}"
+            prewarm_rc=$?
+            set -e
+            if [ $prewarm_rc -eq 0 ]; then
+              echo "[ODC][prewarm] Completed successfully"
+              break
+            fi
+            echo "[ODC][prewarm] Attempt ${attempt} failed with rc=$prewarm_rc. Sleeping 20s before retry..."
+            sleep 20
+          done
+
+          # ---- Run full scan (online) with log + retries ----
           run_odc() {
             docker run --rm \
               -v "$(pwd):/src" \
@@ -153,12 +184,12 @@ jobs:
               --format XML \
               --project "SafeChainMessenger" \
               --out /report \
+              --log /report/odc.log \
               --failOnCVSS 11 \
               --disableNodeAudit \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}"
           }
 
-          # Retry logic to mitigate transient NVD API issues
           set +e
           rc=0
           for attempt in 1 2 3; do
@@ -174,7 +205,13 @@ jobs:
           done
 
           if [ $rc -ne 0 ]; then
-            echo "[ODC] Online update failed after retries. Trying offline run with cached DB (results may be stale)."
+            echo "[ODC] Online scan failed after retries. Log tail:"; tail -n 200 dependency-report/odc.log || true
+            # Only attempt offline if cache has content
+            if [ -z "$(find odc-data -type f -print -quit)" ]; then
+              echo "[ODC] Cache is empty; cannot run offline. Failing." >&2
+              exit $rc
+            fi
+            echo "[ODC] Running offline with cached DB..."
             docker run --rm \
               -v "$(pwd):/src" \
               -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
@@ -184,20 +221,33 @@ jobs:
               --format XML \
               --project "SafeChainMessenger" \
               --out /report \
+              --log /report/odc.log \
               --failOnCVSS 11 \
               --disableNodeAudit \
-              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
               --noupdate
             rc=$?
           fi
           set -e
 
           if [ $rc -ne 0 ]; then
-            echo "[ODC] Failed to produce report even in offline mode. Exiting." >&2
+            echo "[ODC] Failed to produce report (even offline). Exiting." >&2
             exit $rc
           fi
 
           echo "[ODC] Report generated at dependency-report/dependency-check-report.xml"
+
+      - name: (Optional) NVD connectivity diagnostics
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          echo "Testing NVD endpoints (no secret):"
+          curl -sS -w "\nHTTP:%{http_code}\n" "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1" | sed -e 's/{.*}//'
+          echo "Testing NVD endpoints (with apiKey present):"
+          if [ -n "${{ secrets.NVD_API_KEY }}" ]; then
+            curl -sS -w "\nHTTP:%{http_code}\n" "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1&apiKey=${{ secrets.NVD_API_KEY }}" | sed -e 's/{.*}//'
+          else
+            echo "NVD_API_KEY secret not set"
+          fi
 
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
