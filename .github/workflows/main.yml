@@ -81,15 +81,48 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: OWASP Dependency Check Scan
+      - name: OWASP Dependency Check – Prewarm NVD DB (single try + one clean retry)
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p odc-data dependency-report
+
+          echo "[ODC] Prewarm DB if cache is empty..."
+          if [ -z "$(ls -A odc-data 2>/dev/null || true)" ]; then
+            echo "[ODC] No cache found. Attempting single updateonly with NVD API key..."
+            if docker run --rm \
+              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              owasp/dependency-check:10.0.3 \
+              --updateonly \
+              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+              --nvdApiDelay 15000; then
+              echo "[ODC] Prewarm completed."
+            else
+              echo "[ODC] Prewarm failed once. Assuming cache corruption or throttling. Cleaning and retrying once..." >&2
+              rm -rf odc-data
+              mkdir -p odc-data
+              docker run --rm \
+                -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+                owasp/dependency-check:10.0.3 \
+                --updateonly \
+                --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+                --nvdApiDelay 18000
+              echo "[ODC] Prewarm second attempt completed."
+            fi
+          else
+            echo "[ODC] Reusing existing cache in odc-data/."
+          fi
+
+      - name: OWASP Dependency Check – Scan (uses cache)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dependency-report
           docker run --rm \
             -v "$(pwd):/src" \
             -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
             -v "$(pwd)/dependency-report:/report" \
-            owasp/dependency-check:10.0.2 \
+            owasp/dependency-check:10.0.3 \
             --scan /src \
             --format ALL \
             --project "SafeChainMessenger" \
@@ -98,5 +131,4 @@ jobs:
             --exclude "**/dist/**" \
             --exclude "**/build/**" \
             --disableNodeAudit \
-            --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-            --nvdApiDelay 12000
+            --noupdate
