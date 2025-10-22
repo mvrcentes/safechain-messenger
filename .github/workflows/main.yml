@@ -149,7 +149,7 @@ jobs:
 
           echo "Dependency-Check will scan: ${SCAN_ARGS[@]}"
 
-          IMAGE_TAG=owasp/dependency-check:10.0.3
+          IMAGE_TAG=owasp/dependency-check:10.0.2
           # Pull specific stable image tag to avoid regressions
           docker image inspect "$IMAGE_TAG" >/dev/null 2>&1 || docker pull "$IMAGE_TAG"
 
@@ -160,6 +160,7 @@ jobs:
             set +e
             docker run --rm \
               -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
+              -e NVD_API_KEY="${{ secrets.NVD_API_KEY }}" \
               "$IMAGE_TAG" \
               --updateonly \
               --nvdApiKey "${{ secrets.NVD_API_KEY }}"
@@ -179,6 +180,7 @@ jobs:
               -v "$(pwd):/src" \
               -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
               -v "$(pwd)/dependency-report:/report" \
+              -e NVD_API_KEY="${{ secrets.NVD_API_KEY }}" \
               "$IMAGE_TAG" \
               --scan ${SCAN_ARGS[@]} \
               --format XML \
@@ -216,6 +218,7 @@ jobs:
               -v "$(pwd):/src" \
               -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
               -v "$(pwd)/dependency-report:/report" \
+              -e NVD_API_KEY="${{ secrets.NVD_API_KEY }}" \
               "$IMAGE_TAG" \
               --scan ${SCAN_ARGS[@]} \
               --format XML \
