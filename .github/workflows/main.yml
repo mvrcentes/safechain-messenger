@@ -77,7 +77,10 @@ jobs:
               -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
               owasp/dependency-check:10.0.2 \
               --updateonly \
-              --nvdApiDelay 6000
+              --nvdApiDelay 6000 \
+              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+              --ossIndexUser "${{ secrets.OSS_INDEX_USERNAME }}" \
+              --ossIndexPassword "${{ secrets.OSS_INDEX_TOKEN }}"
             echo "[ODC] Prewarm successful."
           else
             echo "[ODC] Reusing existing DB cache in odc-data/."
@@ -96,7 +99,11 @@ jobs:
             --exclude "**/dist/**" \
             --exclude "**/build/**" \
             --disableNodeAudit \
-            --noupdate
+            --noupdate \
+            --nvdApiDelay 6000 \
+            --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
+            --ossIndexUser "${{ secrets.OSS_INDEX_USERNAME }}" \
+            --ossIndexPassword "${{ secrets.OSS_INDEX_TOKEN }}"
 
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
         id: sonar_scan
