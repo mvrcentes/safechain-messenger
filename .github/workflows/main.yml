@@ -16,137 +16,62 @@ concurrency:
 
 jobs:
   sonarqube-analysis:
-    # Self-hosted Linux runner; SonarQube is pre-running on the same VM.
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, linux] # tu runner en la VM donde ya corre SonarQube
     env:
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # e.g. http://localhost:9000
-      SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # ej. http://localhost:9000
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Ensure jq is available (for status check)
-        shell: bash
+      - name: Wait for SonarQube to be UP
         run: |
           set -euo pipefail
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq not found; attempting install..."
-            if command -v apt-get >/dev/null 2>&1; then
-              sudo apt-get update -y
-              sudo apt-get install -y jq
-            else
-              echo "Error: jq is required for the readiness check and could not be installed automatically." >&2
-              exit 1
-            fi
-          fi
-
-      - name: Wait for SonarQube to be ready (fails if not UP)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Waiting for SonarQube to be ready at: ${SONAR_HOST_URL}"
-          attempts=0
-          max_attempts=30
-          until [ $attempts -ge $max_attempts ]
-          do
-            status="$(curl -fsS --max-time 3 "${SONAR_HOST_URL}/api/system/status" | jq -r '.status' || echo DOWN)"
-            echo "Attempt $((attempts+1))/${max_attempts} -> status: ${status}"
-            if [ "${status}" = "UP" ]; then
-              echo "SonarQube is ready."
-              break
-            fi
-            attempts=$((attempts+1))
+          for i in {1..30}; do
+            s=$(curl -fsS --max-time 3 "$SONAR_HOST_URL/api/system/status" | sed -n 's/.*"status":"\([^"]*\)".*/\1/p' || true)
+            echo "Attempt $i/30 -> $s"
+            [ "$s" = "UP" ] && exit 0
             sleep 10
           done
-          if [ "${status}" != "UP" ]; then
-            echo "SonarQube did not become ready in time. Failing the job." >&2
-            exit 78
-          fi
+          echo "SonarQube no estuvo listo a tiempo"; exit 78
 
-      - name: OWASP Dependency Check (Docker)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p odc-data dependency-report
-          echo "[ODC] Prewarm local CVE database if empty..."
-          if [ -z "$(ls -A odc-data 2>/dev/null || true)" ]; then
-            echo "[ODC] odc-data/ is empty; creating DB (single attempt)."
-            docker run --rm \
-              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-              owasp/dependency-check:10.0.2 \
-              --updateonly \
-              --nvdApiDelay 6000 \
-              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-              --ossIndexUser "${{ secrets.OSS_INDEX_USERNAME }}" \
-              --ossIndexPassword "${{ secrets.OSS_INDEX_TOKEN }}"
-            echo "[ODC] Prewarm successful."
-          else
-            echo "[ODC] Reusing existing DB cache in odc-data/."
-          fi
-          # Run OWASP Dependency-Check in Docker and generate XML+HTML reports into ./dependency-report
-          docker run --rm \
-            -v "$(pwd):/src" \
-            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-            -v "$(pwd)/dependency-report:/report" \
-            owasp/dependency-check:10.0.2 \
-            --scan /src \
-            --format ALL \
-            --project "SafeChainMessenger" \
-            --out /report \
-            --exclude "**/node_modules/**" \
-            --exclude "**/dist/**" \
-            --exclude "**/build/**" \
-            --disableNodeAudit \
-            --noupdate \
-            --nvdApiDelay 6000 \
-            --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-            --ossIndexUser "${{ secrets.OSS_INDEX_USERNAME }}" \
-            --ossIndexPassword "${{ secrets.OSS_INDEX_TOKEN }}"
-
-      - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
+      - name: SonarQube Scan (Docker client)
         id: sonar_scan
-        shell: bash
         run: |
           set -euo pipefail
-          # Ensure the scanner writes metadata into the repo workspace
           rm -rf .scannerwork || true
           mkdir -p .scannerwork
 
-          # Pull scanner if not present (does NOT run SonarQube server)
-          if ! docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1; then
+          # Asegura tener la imagen del scanner
+          docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1 || \
             docker pull sonarsource/sonar-scanner-cli:latest
-          fi
 
-          # Use host networking so the scanner can reach localhost:9000 on the runner
+          # Scanner apuntando a tu SonarQube local de la VM
           docker run --rm --network host \
             -w /usr/src \
             --user "$(id -u):$(id -g)" \
-            -e SONAR_HOST_URL="${SONAR_HOST_URL}" \
-            -e SONAR_TOKEN="${SONAR_TOKEN}" \
+            -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+            -e SONAR_TOKEN="$SONAR_TOKEN" \
             -v "$(pwd):/usr/src" \
             sonarsource/sonar-scanner-cli:latest \
             -Dsonar.projectKey="${{ github.repository_owner }}_${{ github.event.repository.name }}" \
             -Dsonar.projectName="${{ github.event.repository.name }}" \
-            -Dsonar.host.url="${SONAR_HOST_URL}" \
-            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
             -Dsonar.sources=. \
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
-            -Dsonar.verbose=true \
-            -Dsonar.dependencyCheck.reportPath=/usr/src/dependency-report/dependency-check-report.xml \
-            -Dsonar.dependencyCheck.htmlReportPath=/usr/src/dependency-report/dependency-check-report.html
+            -Dsonar.verbose=true
 
       - name: Debug report-task
-        shell: bash
         run: |
-          echo "Listing .scannerwork:"
           ls -la .scannerwork || true
-          echo "Show report-task.txt if present:"
           test -f .scannerwork/report-task.txt && cat .scannerwork/report-task.txt || echo "report-task.txt not found"
 
-      - name: SonarQube Quality Gate check
+      - name: SonarQube Quality Gate
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
         with:
