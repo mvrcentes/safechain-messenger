@@ -36,7 +36,7 @@ export function recordFailedLoginAttempt(email) {
 }
 
 // Llamar cuando el login sea exitoso
-export function resetFailedLoginAttempts(email) {
+export async function resetFailedLoginAttempts(email) {
     if (!email) return
     console.log(`[loginAttempts] reset counter for ${email}`)
     attempts.delete(email)

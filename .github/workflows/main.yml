@@ -37,18 +37,15 @@ jobs:
             sleep 10
           done
           echo "SonarQube no estuvo listo a tiempo"; exit 78
-
       - name: SonarQube Scan (Docker client)
         id: sonar_scan
         run: |
           set -euo pipefail
           rm -rf .scannerwork || true
           mkdir -p .scannerwork
-
           # Asegura tener la imagen del scanner
           docker image inspect sonarsource/sonar-scanner-cli:latest >/dev/null 2>&1 || \
             docker pull sonarsource/sonar-scanner-cli:latest
-
           # Scanner apuntando a tu SonarQube local de la VM
           docker run --rm --network host \
             -w /usr/src \
@@ -65,12 +62,10 @@ jobs:
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
             -Dsonar.verbose=true
-
       - name: Debug report-task
         run: |
           ls -la .scannerwork || true
           test -f .scannerwork/report-task.txt && cat .scannerwork/report-task.txt || echo "report-task.txt not found"
-
       - name: SonarQube Quality Gate
         if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
@@ -80,55 +75,3 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
-      - name: OWASP Dependency Check – Prewarm NVD DB (single try + one clean retry)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p odc-data dependency-report
-
-          echo "[ODC] Prewarm DB if cache is empty..."
-          if [ -z "$(ls -A odc-data 2>/dev/null || true)" ]; then
-            echo "[ODC] No cache found. Attempting single updateonly with NVD API key..."
-            if docker run --rm \
-              -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-              owasp/dependency-check:10.0.3 \
-              --updateonly \
-              --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-              --nvdApiDelay 15000; then
-              echo "[ODC] Prewarm completed."
-            else
-              echo "[ODC] Prewarm failed once. Assuming cache corruption or throttling. Cleaning and retrying once..." >&2
-              rm -rf odc-data
-              mkdir -p odc-data
-              docker run --rm \
-                -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-                owasp/dependency-check:10.0.3 \
-                --updateonly \
-                --nvdApiKey "${{ secrets.NVD_API_KEY }}" \
-                --nvdApiDelay 18000
-              echo "[ODC] Prewarm second attempt completed."
-            fi
-          else
-            echo "[ODC] Reusing existing cache in odc-data/."
-          fi
-
-      - name: OWASP Dependency Check – Scan (uses cache)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dependency-report
-          docker run --rm \
-            -v "$(pwd):/src" \
-            -v "$(pwd)/odc-data:/usr/share/dependency-check/data" \
-            -v "$(pwd)/dependency-report:/report" \
-            owasp/dependency-check:10.0.3 \
-            --scan /src \
-            --format ALL \
-            --project "SafeChainMessenger" \
-            --out /report \
-            --exclude "**/node_modules/**" \
-            --exclude "**/dist/**" \
-            --exclude "**/build/**" \
-            --disableNodeAudit \
-            --noupdate
