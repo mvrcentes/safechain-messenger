@@ -12,15 +12,15 @@ import userRoutes from "./routes/user.routes.js"
 
 const app = express()
 
-const allowedOrigins = [
+const allowedOrigins = new Set([
   `http://localhost:${process.env.FRONTEND_LOCAL_PORT || 5173}`,
-  process.env.FRONTEND_URL,            // ej: https://app.tu-dominio.com
-].filter(Boolean)
+  process.env.FRONTEND_URL,
+].filter(Boolean))
 
 const corsOptions = {
   origin(origin, cb) {
     // Permite tools sin "Origin" (curl/Postman) y orígenes en whitelist
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
+    if (!origin || allowedOrigins.has(origin)) return cb(null, true)
     return cb(new Error(`CORS blocked for origin: ${origin}`))
   },
   credentials: true,

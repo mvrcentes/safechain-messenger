@@ -45,11 +45,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Checking SonarQube status at: ${SONAR_HOST_URL}"
-          status="$(curl -fsS --max-time 5 "${SONAR_HOST_URL}/api/system/status" | jq -r '.status' || echo DOWN)"
-          echo "SonarQube status: ${status}"
+          echo "Waiting for SonarQube to be ready at: ${SONAR_HOST_URL}"
+          attempts=0
+          max_attempts=30
+          until [ $attempts -ge $max_attempts ]
+          do
+            status="$(curl -fsS --max-time 3 "${SONAR_HOST_URL}/api/system/status" | jq -r '.status' || echo DOWN)"
+            echo "Attempt $((attempts+1))/${max_attempts} -> status: ${status}"
+            if [ "${status}" = "UP" ]; then
+              echo "SonarQube is ready."
+              break
+            fi
+            attempts=$((attempts+1))
+            sleep 10
+          done
           if [ "${status}" != "UP" ]; then
-            echo "SonarQube is not ready (status=${status}). Failing the job with a neutral code to avoid false positives." >&2
+            echo "SonarQube did not become ready in time. Failing the job." >&2
             exit 78
           fi
       - name: SonarQube Scan (Docker client only; does NOT start SonarQube)
@@ -80,9 +91,6 @@ jobs:
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
             -Dsonar.verbose=true
-            -Dsonar.coverage.exclusions="**/*" \
-            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,**/coverage/**,**/build/**,**/public/**,**/out/**,**/*.generated.*,**/*-generated.*" \
-            -Dsonar.cpd.exclusions="**/*.generated.*,**/*-generated.*,**/public/**,**/dist/**,**/build/**" \
       - name: Debug report-task
         shell: bash
         run: |
@@ -91,7 +99,7 @@ jobs:
           echo "Show report-task.txt if present:"
           test -f .scannerwork/report-task.txt && cat .scannerwork/report-task.txt || echo "report-task.txt not found"
       - name: SonarQube Quality Gate check
-        if: ${{ github.event_name == 'pull_request' && steps.sonar_scan.outcome == 'success' }}
+        if: ${{ steps.sonar_scan.outcome == 'success' }}
         uses: SonarSource/sonarqube-quality-gate-action@v1
         with:
           scanMetadataReportFile: .scannerwork/report-task.txt
