@@ -3,7 +3,7 @@ import { extractUserFromToken } from "../../lib/utils.js"
 
 export async function getMessagesWithUser(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -35,7 +35,7 @@ export async function getMessagesWithUser(req, res) {
     let messages = []
 
     if (isGroup) {
-      const groupId = parseInt(rawParam.split("group-")[1])
+      const groupId = Number.parseInt(rawParam.split("group-")[1])
       if (isNaN(groupId)) {
         return res.status(400).json({ error: "Invalid group ID" })
       }
@@ -45,7 +45,7 @@ export async function getMessagesWithUser(req, res) {
         orderBy: { createdAt: "asc" },
       })
     } else {
-      const targetUserId = parseInt(rawParam)
+      const targetUserId = Number.parseInt(rawParam)
       if (isNaN(targetUserId)) {
         return res.status(400).json({ error: "Invalid user ID" })
       }

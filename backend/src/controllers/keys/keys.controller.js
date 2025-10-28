@@ -6,7 +6,7 @@ export async function getSigningPublicKey(req, res) {
   const { id } = req.params
   try {
     const userData = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: Number.parseInt(id) },
       select: { signingPublicKey: true },
     })
     if (!userData?.signingPublicKey) {
@@ -21,7 +21,7 @@ export async function getSigningPublicKey(req, res) {
 
 export async function getKeys(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -52,7 +52,7 @@ export async function getKeys(req, res) {
 
 export async function createKeys(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -82,7 +82,7 @@ export async function createKeys(req, res) {
 
 export async function updateKeys(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -120,7 +120,7 @@ export async function updateKeys(req, res) {
 
 export async function updateSigningKey(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -150,7 +150,7 @@ export async function updateSigningKey(req, res) {
 
 export async function createPreKeys(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -185,7 +185,7 @@ export async function createPreKeys(req, res) {
 
 export async function getPreKeys(req, res) {
   const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!authHeader?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" })
   }
 
@@ -195,7 +195,7 @@ export async function getPreKeys(req, res) {
   }
 
   const { userId } = req.query
-  const targetUserId = userId ? parseInt(userId) : requestingUser.id
+  const targetUserId = userId ? Number.parseInt(userId) : requestingUser.id
 
   try {
     const preKeys = await prisma.preKey.findMany({

@@ -171,7 +171,7 @@ export const loginWithMFA = async (req, res) => {
       },
     })
 
-    if (!user || !user.mfaSecret) {
+    if (!user?.mfaSecret) {
       console.log(
         chalk.red("❌ MFA login failed - MFA not active or user not found")
       )
