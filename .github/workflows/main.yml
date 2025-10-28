@@ -80,6 +80,9 @@ jobs:
             -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,frontend/src/components/ui/**" \
             -Dsonar.working.directory=/usr/src/.scannerwork \
             -Dsonar.verbose=true
+            -Dsonar.coverage.exclusions="**/*" \
+            -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.git/**,**/coverage/**,**/build/**,**/public/**,**/out/**,**/*.generated.*,**/*-generated.*" \
+            -Dsonar.cpd.exclusions="**/*.generated.*,**/*-generated.*,**/public/**,**/dist/**,**/build/**" \
       - name: Debug report-task
         shell: bash
         run: |

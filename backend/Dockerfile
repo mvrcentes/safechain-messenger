@@ -1,5 +1,5 @@
 # Usa la imagen oficial de Bun
-FROM oven/bun:latest
+FROM oven/bun:1
 
 # Establece el directorio de trabajo dentro del contenedor
 WORKDIR /app
