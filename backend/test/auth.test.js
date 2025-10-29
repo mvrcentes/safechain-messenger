@@ -1,5 +1,3 @@
-//  auth.test.js
-
 // // backend/test/auth/register.unit.test.js
 // import { test, expect, vi, beforeEach } from "vitest"
 
