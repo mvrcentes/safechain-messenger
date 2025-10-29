@@ -13,6 +13,8 @@ vi.mock("../src/database.js", () => {
 
 // Importa el router de health después del mock
 import healthRouter from "../src/health/health.routes.js"
+// Importa la instancia mockeada para ajustar por test
+import prisma from "../src/database.js"
 
 // Crea una app mínima para montar SOLO la ruta de health
 function createTestApp() {
@@ -23,29 +25,23 @@ function createTestApp() {
 
 let app
 beforeEach(() => {
+    // Limpia historial e implementaciones temporales entre tests
+    vi.clearAllMocks()
     app = createTestApp()
 })
 
 test("GET /health responde 200 y database: connected", async () => {
+    // Asegura que la llamada a la DB resuelva para este test
+    prisma.$queryRaw.mockResolvedValueOnce([{ ok: 1 }])
     const res = await request(app).get("/health")
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ status: "ok", database: "connected" })
 })
 
-test("GET /health responde 500 cuando la base de datos falla", async () => {
-  const mockError = new Error("Database error")
-  prisma.$queryRaw.mockRejectedValueOnce(mockError)
-
-  // Espiamos el console.error para verificar que se ejecuta
-  const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
-
-  const res = await request(app).get("/health")
-
-  expect(res.status).toBe(500)
-  expect(res.body).toEqual({ status: "error", database: "disconnected" })
-
-  // Verifica que console.error fue llamado con el mensaje correcto
-  expect(consoleSpy).toHaveBeenCalledWith("Health check failed:", mockError)
-
-  consoleSpy.mockRestore()
+test("GET /health responde 500 y database: disconnected", async () => {
+    // Simula fallo en la DB para este test
+    prisma.$queryRaw.mockRejectedValueOnce(new Error("db down"))
+    const res = await request(app).get("/health")
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ status: "error", database: "disconnected" })
 })

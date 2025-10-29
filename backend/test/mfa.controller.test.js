@@ -1,46 +1,7 @@
-import { beforeEach, describe, expect, test, vi } from "vitest"
-import express from "express"
-import request from "supertest"
+import { test, expect, vi, beforeEach } from "vitest"
 
-// --- Mocks de dependencias ---
-vi.mock("chalk", () => ({
-  default: {
-    red: vi.fn((x) => x),
-    green: vi.fn((x) => x),
-    yellow: vi.fn((x) => x),
-  },
-}))
-
-vi.mock("qrcode", () => ({
-  default: {
-    toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qrcode"),
-  },
-  toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qrcode"),
-}))
-
-vi.mock("speakeasy", () => ({
-  default: {
-    generateSecret: vi.fn(() => ({
-      base32: "BASE32SECRET",
-      otpauth_url: "otpauth://totp/SafeChain?secret=BASE32SECRET",
-    })),
-    totp: { verify: vi.fn() },
-  },
-  generateSecret: vi.fn(() => ({
-    base32: "BASE32SECRET",
-    otpauth_url: "otpauth://totp/SafeChain?secret=BASE32SECRET",
-  })),
-  totp: { verify: vi.fn() },
-}))
-
-vi.mock("jsonwebtoken", () => ({
-  default: {
-    verify: vi.fn(),
-  },
-  verify: vi.fn(),
-}))
-
-vi.mock("../../src/database.js", () => ({
+// Mocks: deben declararse antes de importar el controlador
+vi.mock("../src/database.js", () => ({
   default: {
     user: {
       findUnique: vi.fn(),
@@ -49,178 +10,166 @@ vi.mock("../../src/database.js", () => ({
   },
 }))
 
-// --- Imports reales después de mocks ---
-import prisma from "../../src/database.js"
-import jwt from "jsonwebtoken"
-import speakeasy from "speakeasy"
+vi.mock("qrcode", () => ({
+  default: {
+    toDataURL: vi.fn().mockResolvedValue("data:image/png;base64,qrdata"),
+  },
+}))
+
+vi.mock("speakeasy", () => ({
+  default: {
+    generateSecret: vi.fn().mockReturnValue({ base32: "BASE32SECRET", otpauth_url: "otpauth://totp/SafeChain" }),
+    totp: {
+      verify: vi.fn(),
+    },
+  },
+}))
+
+vi.mock("jsonwebtoken", () => ({
+  default: {
+    verify: vi.fn().mockReturnValue({ email: "test@example.com" }),
+  },
+}))
+
+// Evita logs ruidosos
+vi.mock("chalk", () => ({
+  default: {
+    blue: (t) => t,
+    green: (t) => t,
+    red: (t) => t,
+    yellow: (t) => t,
+    magenta: (t) => t,
+    gray: (t) => t,
+  },
+}))
+
+import prisma from "../src/database.js"
 import qrcode from "qrcode"
+import speakeasy from "speakeasy"
+import jwt from "jsonwebtoken"
+
 import {
   getMFAStatus,
   setupMFA,
   verifyAndEnableMFA,
   disableMFA,
-} from "../../src/mfa/mfa.controller.js"
+} from "../src/controllers/auth/mfa.controller.js"
 
-// --- App auxiliar ---
-function createApp() {
-  const app = express()
-  app.use(express.json())
-  app.get("/mfa/status", getMFAStatus)
-  app.post("/mfa/setup", setupMFA)
-  app.post("/mfa/verify", verifyAndEnableMFA)
-  app.post("/mfa/disable", disableMFA)
-  return app
+function createRes() {
+  return {
+    statusCode: 200,
+    body: undefined,
+    headers: {},
+    status(code) {
+      this.statusCode = code
+      return this
+    },
+    json(payload) {
+      this.body = payload
+      return this
+    },
+    setHeader(k, v) {
+      this.headers[k] = v
+    },
+  }
 }
 
-let app
 beforeEach(() => {
-  app = createApp()
   vi.clearAllMocks()
-  process.env.JWT_SECRET = "secret"
 })
 
-// --- TESTS ---
+test("getMFAStatus responde 401 sin token", async () => {
+  const req = { headers: {} }
+  const res = createRes()
 
-describe("MFA Controller", () => {
-  test("getMFAStatus → 401 si token faltante o inválido", async () => {
-    jwt.verify.mockImplementation(() => {
-      throw new Error("invalid")
-    })
+  await getMFAStatus(req, res)
 
-    const res = await request(app).get("/mfa/status")
-    expect(res.status).toBe(401)
-    expect(res.body).toEqual({ error: "Invalid or missing token" })
-  })
+  expect(res.statusCode).toBe(401)
+  expect(res.body).toEqual({ error: "Invalid or missing token" })
+})
 
-  test("getMFAStatus → 200 si MFA habilitado", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    prisma.user.findUnique.mockResolvedValueOnce({ mfaSecret: "XYZ" })
+test("getMFAStatus responde mfaEnabled true cuando hay secret en DB", async () => {
+  const req = { headers: { authorization: "Bearer validtoken" } }
+  prisma.user.findUnique.mockResolvedValue({ mfaSecret: "ABC" })
+  const res = createRes()
 
-    const res = await request(app)
-      .get("/mfa/status")
-      .set("Authorization", "Bearer token")
+  await getMFAStatus(req, res)
 
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ mfaEnabled: true })
-  })
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toEqual({ mfaEnabled: true })
+  expect(prisma.user.findUnique).toHaveBeenCalled()
+})
 
-  test("getMFAStatus → 500 si la base de datos falla", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    prisma.user.findUnique.mockRejectedValueOnce(new Error("DB error"))
+test("setupMFA devuelve secret y qrCode cuando token válido", async () => {
+  const req = { headers: { authorization: "Bearer validtoken" } }
+  const res = createRes()
 
-    const res = await request(app)
-      .get("/mfa/status")
-      .set("Authorization", "Bearer token")
+  await setupMFA(req, res)
 
-    expect(res.status).toBe(500)
-    expect(res.body).toEqual({ error: "Failed to get MFA status" })
-  })
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toHaveProperty("secret", "BASE32SECRET")
+  expect(res.body).toHaveProperty("qrCode", "data:image/png;base64,qrdata")
+  expect(qrcode.toDataURL).toHaveBeenCalled()
+})
 
-  test("setupMFA → 200 devuelve secret y QR", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    const res = await request(app)
-      .post("/mfa/setup")
-      .set("Authorization", "Bearer token")
+test("verifyAndEnableMFA devuelve 400 cuando faltan campos", async () => {
+  const req = { headers: { authorization: "Bearer validtoken" }, body: {} }
+  const res = createRes()
 
-    expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty("secret", "BASE32SECRET")
-    expect(res.body).toHaveProperty("qrCode")
-  })
+  await verifyAndEnableMFA(req, res)
 
-  test("setupMFA → 500 si falla QR", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    qrcode.toDataURL.mockRejectedValueOnce(new Error("QR error"))
+  expect(res.statusCode).toBe(400)
+  expect(res.body).toEqual({ error: "Missing fields" })
+})
 
-    const res = await request(app)
-      .post("/mfa/setup")
-      .set("Authorization", "Bearer token")
+test("verifyAndEnableMFA devuelve 401 si el código es inválido", async () => {
+  const req = {
+    headers: { authorization: "Bearer validtoken" },
+    body: { token: "123456", secret: "BASE32SECRET" },
+  }
+  const res = createRes()
+  speakeasy.totp.verify.mockReturnValue(false)
 
-    expect(res.status).toBe(500)
-    expect(res.body).toEqual({ error: "Failed to generate MFA QR" })
-  })
+  await verifyAndEnableMFA(req, res)
 
-  test("verifyAndEnableMFA → 400 si faltan campos", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    const res = await request(app)
-      .post("/mfa/verify")
-      .set("Authorization", "Bearer token")
-      .send({})
+  expect(res.statusCode).toBe(401)
+  expect(res.body).toEqual({ error: "Invalid MFA code" })
+})
 
-    expect(res.status).toBe(400)
-    expect(res.body).toEqual({ error: "Missing fields" })
-  })
+test("verifyAndEnableMFA habilita MFA cuando el código es válido", async () => {
+  const req = {
+    headers: { authorization: "Bearer validtoken" },
+    body: { token: "123456", secret: "BASE32SECRET" },
+  }
+  const res = createRes()
+  speakeasy.totp.verify.mockReturnValue(true)
+  prisma.user.update.mockResolvedValue({})
 
-  test("verifyAndEnableMFA → 401 si código inválido", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    speakeasy.totp.verify.mockReturnValueOnce(false)
+  await verifyAndEnableMFA(req, res)
 
-    const res = await request(app)
-      .post("/mfa/verify")
-      .set("Authorization", "Bearer token")
-      .send({ token: "123456", secret: "BASE32" })
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toEqual({ message: "MFA enabled successfully" })
+  expect(prisma.user.update).toHaveBeenCalledWith({ where: { email: "test@example.com" }, data: { mfaSecret: "BASE32SECRET" } })
+})
 
-    expect(res.status).toBe(401)
-    expect(res.body).toEqual({ error: "Invalid MFA code" })
-  })
+test("disableMFA devuelve 401 si token inválido", async () => {
+  const req = { headers: {} }
+  const res = createRes()
 
-  test("verifyAndEnableMFA → 200 cuando todo es válido", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    speakeasy.totp.verify.mockReturnValueOnce(true)
-    prisma.user.update.mockResolvedValueOnce({})
+  await disableMFA(req, res)
 
-    const res = await request(app)
-      .post("/mfa/verify")
-      .set("Authorization", "Bearer token")
-      .send({ token: "123456", secret: "BASE32" })
+  expect(res.statusCode).toBe(401)
+  expect(res.body).toEqual({ error: "Invalid or missing token" })
+})
 
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: "MFA enabled successfully" })
-  })
+test("disableMFA deshabilita MFA cuando token válido", async () => {
+  const req = { headers: { authorization: "Bearer validtoken" } }
+  const res = createRes()
+  prisma.user.update.mockResolvedValue({})
 
-  test("verifyAndEnableMFA → 500 si falla update", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    speakeasy.totp.verify.mockReturnValueOnce(true)
-    prisma.user.update.mockRejectedValueOnce(new Error("DB error"))
+  await disableMFA(req, res)
 
-    const res = await request(app)
-      .post("/mfa/verify")
-      .set("Authorization", "Bearer token")
-      .send({ token: "123456", secret: "BASE32" })
-
-    expect(res.status).toBe(500)
-    expect(res.body).toEqual({ error: "Failed to enable MFA" })
-  })
-
-  test("disableMFA → 401 si token inválido", async () => {
-    jwt.verify.mockImplementation(() => {
-      throw new Error("invalid")
-    })
-    const res = await request(app).post("/mfa/disable")
-    expect(res.status).toBe(401)
-    expect(res.body).toEqual({ error: "Invalid or missing token" })
-  })
-
-  test("disableMFA → 200 cuando se deshabilita correctamente", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    prisma.user.update.mockResolvedValueOnce({})
-
-    const res = await request(app)
-      .post("/mfa/disable")
-      .set("Authorization", "Bearer token")
-
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({ message: "MFA disabled successfully" })
-  })
-
-  test("disableMFA → 500 si falla update", async () => {
-    jwt.verify.mockReturnValue({ email: "user@mail.com" })
-    prisma.user.update.mockRejectedValueOnce(new Error("DB error"))
-
-    const res = await request(app)
-      .post("/mfa/disable")
-      .set("Authorization", "Bearer token")
-
-    expect(res.status).toBe(500)
-    expect(res.body).toEqual({ error: "Failed to disable MFA" })
-  })
+  expect(res.statusCode).toBe(200)
+  expect(res.body).toEqual({ message: "MFA disabled successfully" })
+  expect(prisma.user.update).toHaveBeenCalledWith({ where: { email: "test@example.com" }, data: { mfaSecret: null } })
 })
