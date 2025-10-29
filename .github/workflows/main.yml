@@ -31,7 +31,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
       - name: Install backend deps
         working-directory: backend
         shell: bash
@@ -41,8 +40,12 @@ jobs:
             bun install
           elif command -v pnpm >/dev/null 2>&1; then
             pnpm i --frozen-lockfile
-          else
+          elif [ -f package-lock.json ]; then
             npm ci
+          elif [ -f package.json ]; then
+            npm i
+          else
+            echo "No package.json found in $(pwd). Skipping install." >&2
           fi
       - name: Run backend tests with coverage
         working-directory: backend
