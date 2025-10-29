@@ -19,14 +19,33 @@ jobs:
     # Self-hosted Linux runner; SonarQube is pre-running on the same VM.
     runs-on: [self-hosted, linux]
     env:
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}   # e.g. http://localhost:9000
-      SONAR_TOKEN:     ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # e.g. http://localhost:9000
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      - name: Install backend deps
+        working-directory: backend
+        shell: bash
+        run: |
+          if command -v bun >/dev/null 2>&1; then
+            bun install
+          elif command -v pnpm >/dev/null 2>&1; then
+            pnpm i --frozen-lockfile
+          else
+            npm ci
+          fi
+      - name: Run backend tests with coverage
+        working-directory: backend
+        shell: bash
+        run: |
+          if command -v bun >/dev/null 2>&1; then
+            bunx vitest run --coverage
+          else
+            npx vitest run --coverage
+          fi
       - name: Ensure jq is available (for status check)
         shell: bash
         run: |

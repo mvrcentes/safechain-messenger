@@ -1,4 +1,4 @@
-import rateLimit from "express-rate-limit"
+import rateLimit, { ipKeyGenerator } from "express-rate-limit"
 
 // 5 requests por IP cada 15 minutos
 export const loginIpRateLimiter = rateLimit({
@@ -6,7 +6,8 @@ export const loginIpRateLimiter = rateLimit({
     max: 5, // intentos
     standardHeaders: true, // RateLimit-* headers
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip,
+    // Use the library's ipKeyGenerator helper so IPv6 addresses are handled correctly
+    keyGenerator: (req) => ipKeyGenerator(req),
     handler: (req, res /*, next*/) => {
         // Si confías en proxy (app.set('trust proxy', 1)), resetTime viene poblado
         const resetDate = req.rateLimit?.resetTime instanceof Date
