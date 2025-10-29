@@ -4,10 +4,16 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "node --env-file .env --watch src/index.js "
+    "dev": "node --env-file .env --watch src/index.js ",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@vitest/coverage-v8": "4.0.4",
+    "c8": "^10.1.3",
+    "supertest": "^7.1.4",
+    "vitest": "^4.0.4"
   },
   "peerDependencies": {
     "typescript": "^5"

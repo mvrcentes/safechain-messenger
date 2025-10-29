@@ -9,6 +9,7 @@ import keysRoutes from "./routes/keys.routes.js"
 import messageRouter from "./routes/message.routes.js"
 import mfaRoutes from "./routes/mfa.routes.js"
 import userRoutes from "./routes/user.routes.js"
+import healthRoutes from "./health/health.routes.js"
 
 const app = express()
 
@@ -92,6 +93,7 @@ app.use("/api/user", userRoutes)
 app.use("/api/message", messageRouter)
 app.use("/api/group", groupRoutes)
 app.use("/api/keys", keysRoutes)
+app.use("/api/health", healthRoutes)
 
 export default app
 
