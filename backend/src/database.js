@@ -2,7 +2,11 @@
 import pkg from "@prisma/client"
 const { PrismaClient } = pkg
 
-let prisma
+// Explicitly initialize to null so static analyzers (e.g. SonarQube)
+// don't report the variable as uninitialized. The variable will be
+// assigned below in the normal runtime path or a fallback stub will
+// be provided in the catch block for test environments.
+let prisma = null
 try {
   prisma = new PrismaClient()
   prisma
