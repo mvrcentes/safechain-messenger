@@ -29,8 +29,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: |
             backend/package-lock.json
             backend/npm-shrinkwrap.json
@@ -52,6 +52,9 @@ jobs:
           else
             echo "No package.json found in $(pwd). Skipping install." >&2
           fi
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
       - name: Run backend tests with coverage
         working-directory: backend
         shell: bash
