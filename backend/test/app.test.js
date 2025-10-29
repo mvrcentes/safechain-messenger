@@ -31,3 +31,21 @@ test("GET /health responde 200 y database: connected", async () => {
     expect(res.status).toBe(200)
     expect(res.body).toEqual({ status: "ok", database: "connected" })
 })
+
+test("GET /health responde 500 cuando la base de datos falla", async () => {
+  const mockError = new Error("Database error")
+  prisma.$queryRaw.mockRejectedValueOnce(mockError)
+
+  // Espiamos el console.error para verificar que se ejecuta
+  const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+  const res = await request(app).get("/health")
+
+  expect(res.status).toBe(500)
+  expect(res.body).toEqual({ status: "error", database: "disconnected" })
+
+  // Verifica que console.error fue llamado con el mensaje correcto
+  expect(consoleSpy).toHaveBeenCalledWith("Health check failed:", mockError)
+
+  consoleSpy.mockRestore()
+})
