@@ -52,7 +52,7 @@ async function persistGroupMessage({ prisma, from, groupId, content }) {
 
 // Basic schema validation (defense-in-depth)
 function isObject(x) { return x !== null && typeof x === "object" && !Array.isArray(x) }
-function hasKeys(obj, keys) { return keys.every((k) => Object.prototype.hasOwnProperty.call(obj, k)) }
+function hasKeys(obj, keys) { return keys.every((k) => Object.hasOwn(obj, k)) }
 
 export function setupWebSocket(wss) {
   wss.on("connection", (ws) => {
