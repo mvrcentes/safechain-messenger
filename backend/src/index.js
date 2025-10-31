@@ -1,4 +1,4 @@
-import http from "http"
+import http from "node:http"
 import { WebSocketServer } from "ws"
 import app from "./app.js"
 import "./database.js"

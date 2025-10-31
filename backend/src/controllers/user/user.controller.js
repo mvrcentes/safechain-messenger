@@ -27,8 +27,8 @@ export const getAllUsers = async (req, res) => {
 
 
 export const getPublicEncryptKey = async (req, res) => {
-  const userId = parseInt(req.params.id)
-  if (isNaN(userId)) return res.status(400).json({ error: "Invalid user ID" })
+  const userId = Number.parseInt(req.params.id)
+  if (Number.isNaN(userId)) return res.status(400).json({ error: "Invalid user ID" })
 
   try {
     const user = await prisma.user.findUnique({

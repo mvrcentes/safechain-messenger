@@ -5,111 +5,142 @@ import sanitizeHtml from "sanitize-html"
 
 const clients = new Map()
 
+// Reusable sanitize options (OWASP: XSS defense)
+const SANITIZE_OPTS = { allowedTags: [], allowedAttributes: {} }
+
+// Defensive JSON parse to avoid throwing on malformed frames
+function safeJsonParse(data) {
+  try {
+    return JSON.parse(data)
+  } catch {
+    return null
+  }
+}
+
+function sanitizeContent(raw) {
+  return sanitizeHtml(raw || "", SANITIZE_OPTS)
+}
+
+function sendJson(ws, payload) {
+  try {
+    ws && ws.readyState === ws.OPEN && ws.send(JSON.stringify(payload))
+  } catch (e) {
+    console.error("❌ Error sending WebSocket message:", e)
+  }
+}
+
+async function persistDirectMessage({ prisma, from, to, content }) {
+  const savedMessage = await prisma.message.create({
+    data: { fromUserId: from, toUserId: to, content },
+  })
+  // Fire-and-forget blockchain audit trail
+  createBlockchainEntry(savedMessage.id, content).catch((err) =>
+    console.error("❌ Error registrando en blockchain:", err)
+  )
+  return savedMessage
+}
+
+async function persistGroupMessage({ prisma, from, groupId, content }) {
+  const savedMessage = await prisma.message.create({
+    data: { fromUserId: from, groupId, content },
+  })
+  createBlockchainEntry(savedMessage.id, content).catch((err) =>
+    console.error("❌ Error registrando en blockchain (grupo):", err)
+  )
+  return savedMessage
+}
+
+// Basic schema validation (defense-in-depth)
+function isObject(x) { return x !== null && typeof x === "object" && !Array.isArray(x) }
+function hasKeys(obj, keys) { return keys.every((k) => Object.prototype.hasOwnProperty.call(obj, k)) }
+
 export function setupWebSocket(wss) {
   wss.on("connection", (ws) => {
     console.log(chalk.blue("📡 New WebSocket connection"))
 
     ws.on("message", async (data) => {
+      // Drop overly large frames (simple abuse control, OWASP: Size Limits)
+      if (typeof data === "string" && data.length > 10 * 1024) {
+        console.warn("⚠️ Dropping oversized WebSocket frame")
+        return
+      }
+
       try {
-        const msg = JSON.parse(data)
+        const msg = safeJsonParse(data)
+        if (!isObject(msg) || typeof msg.type !== "string") return
 
-        if (msg.type === "init") {
-          // Save the connection under the userId
-          clients.set(msg.userId, ws)
-          console.log(chalk.green(`✅ Registered client: ${msg.userId}`))
-          return
-        }
-
-        // Single direct message
-        if (msg.type === "message") {
-          const { to, from, content } = msg
-
-          // Sanitize incoming message content to prevent XSS
-          const cleanContent = sanitizeHtml(content || "", {
-            allowedTags: [],         // strip all HTML tags
-            allowedAttributes: {},   // no attributes allowed
-          })
-
-          const savedMessage = await prisma.message.create({
-            data: {
-              fromUserId: from,
-              toUserId: to,
-              content: cleanContent,
-            },
-          })
-
-          createBlockchainEntry(savedMessage.id, cleanContent).catch((err) =>
-            console.error("❌ Error registrando en blockchain:", err)
-          )
-
-          const recipient = clients.get(to)
-          if (recipient) {
-            recipient.send(
-              JSON.stringify({
-                type: "message",
-                fromUserId: from,
-                toUserId: to,
-                content: cleanContent,
-                id: savedMessage.id,
-                createdAt: savedMessage.createdAt,
-              })
-            )
+        switch (msg.type) {
+          case "init": {
+            if (!hasKeys(msg, ["userId"])) return
+            clients.set(msg.userId, ws)
+            console.log(chalk.green(`✅ Registered client: ${msg.userId}`))
+            return
           }
-          return
-        }
 
-        // Group message
-        if (msg.type === "group-message") {
-          const { from, groupId, content } = msg
-
-          // Sanitize group message content
-          const cleanContent = sanitizeHtml(content || "", {
-            allowedTags: [],
-            allowedAttributes: {},
-          })
-
-          const savedMessage = await prisma.message.create({
-            data: {
-              fromUserId: from,
-              groupId,
+          case "message": {
+            if (!hasKeys(msg, ["from", "to", "content"])) return
+            const cleanContent = sanitizeContent(msg.content)
+            const saved = await persistDirectMessage({
+              prisma,
+              from: msg.from,
+              to: msg.to,
               content: cleanContent,
-            },
-          })
+            })
+            const recipient = clients.get(msg.to)
+            if (recipient) {
+              sendJson(recipient, {
+                type: "message",
+                fromUserId: msg.from,
+                toUserId: msg.to,
+                content: cleanContent,
+                id: saved.id,
+                createdAt: saved.createdAt,
+              })
+            }
+            return
+          }
 
-          createBlockchainEntry(savedMessage.id, cleanContent).catch((err) =>
-            console.error("❌ Error registrando en blockchain (grupo):", err)
-          )
-
-          const group = await prisma.group.findUnique({
-            where: { id: groupId },
-            include: { members: true },
-          })
-
-          if (group && Array.isArray(group.members)) {
-            for (const member of group.members) {
-              const client = clients.get(member.id)
-              if (client) {
-                client.send(
-                  JSON.stringify({
+          case "group-message": {
+            if (!hasKeys(msg, ["from", "groupId", "content"])) return
+            const cleanContent = sanitizeContent(msg.content)
+            const saved = await persistGroupMessage({
+              prisma,
+              from: msg.from,
+              groupId: msg.groupId,
+              content: cleanContent,
+            })
+            const group = await prisma.group.findUnique({
+              where: { id: msg.groupId },
+              include: { members: true },
+            })
+            if (group && Array.isArray(group.members)) {
+              for (const member of group.members) {
+                const client = clients.get(member.id)
+                if (client) {
+                  sendJson(client, {
                     type: "group-message",
-                    fromUserId: from,
-                    groupId,
+                    fromUserId: msg.from,
+                    groupId: msg.groupId,
                     content: cleanContent,
-                    id: savedMessage.id,
-                    createdAt: savedMessage.createdAt,
+                    id: saved.id,
+                    createdAt: saved.createdAt,
                   })
-                )
+                }
               }
             }
+            return
           }
-          return
-        }
 
-        // Disconnect message (optional)
-        if (msg.type === "disconnect") {
-          clients.delete(msg.userId)
-          console.log(chalk.gray(`👋 Disconnected client: ${msg.userId}`))
-          return
+          case "disconnect": {
+            if (!hasKeys(msg, ["userId"])) return
+            clients.delete(msg.userId)
+            console.log(chalk.gray(`👋 Disconnected client: ${msg.userId}`))
+            return
+          }
+
+          default:
+            // Unknown message types are ignored to avoid unsafe behavior
+            return
         }
       } catch (error) {
         console.error(chalk.red("❌ Error handling message:"), error)

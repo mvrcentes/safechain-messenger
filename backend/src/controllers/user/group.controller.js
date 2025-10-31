@@ -69,7 +69,7 @@ export const sendGroupMessage = async (req, res) => {
   const user = extractUserFromToken(req)
   if (!user) return res.status(401).json({ error: "Unauthorized" })
 
-  const groupId = parseInt(req.params.groupId)
+  const groupId = Number.parseInt(req.params.groupId)
   const { content } = req.body
 
   if (!content || !groupId) {
@@ -97,7 +97,7 @@ export const getEncryptedGroupKey = async (req, res) => {
   const user = extractUserFromToken(req)
   if (!user) return res.status(401).json({ error: "Unauthorized" })
 
-  const groupId = parseInt(req.params.groupId)
+  const groupId = Number.parseInt(req.params.groupId)
   if (!groupId) {
     return res.status(400).json({ error: "Missing groupId" })
   }

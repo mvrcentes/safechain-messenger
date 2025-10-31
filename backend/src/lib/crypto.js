@@ -1,6 +1,6 @@
 
 
-import crypto from "crypto"
+import crypto from "node:crypto"
 
 /**
  * Encrypts a string using AES-256-GCM with a shared secret.

@@ -13,20 +13,6 @@ export async function getMessagesWithUser(req, res) {
   }
 
   try {
-    // const currentUserId = user.id
-    // const targetUserId = parseInt(req.params.userId)
-
-    // const messages = await prisma.message.findMany({
-    //   where: {
-    //     OR: [
-    //       { fromUserId: currentUserId, toUserId: targetUserId },
-    //       { fromUserId: targetUserId, toUserId: currentUserId },
-    //     ],
-    //   },
-    //   orderBy: { createdAt: "asc" },
-    // })
-
-    // res.json(messages)
     const currentUserId = user.id
     const rawParam = req.params.userId
     const isGroup =
@@ -36,7 +22,7 @@ export async function getMessagesWithUser(req, res) {
 
     if (isGroup) {
       const groupId = Number.parseInt(rawParam.split("group-")[1])
-      if (isNaN(groupId)) {
+      if (Number.isNaN(groupId)) {
         return res.status(400).json({ error: "Invalid group ID" })
       }
 
@@ -46,7 +32,7 @@ export async function getMessagesWithUser(req, res) {
       })
     } else {
       const targetUserId = Number.parseInt(rawParam)
-      if (isNaN(targetUserId)) {
+      if (Number.isNaN(targetUserId)) {
         return res.status(400).json({ error: "Invalid user ID" })
       }
 
