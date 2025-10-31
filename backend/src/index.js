@@ -11,5 +11,5 @@ const wss = new WebSocketServer({ server })
 setupWebSocket(wss) // lógica de conexión y reenvío de mensajes
 
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
+  console.log(` Server running on http://localhost:${PORT}`)
 })

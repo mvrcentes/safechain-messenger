@@ -33,10 +33,10 @@ export const createGroup = async (req, res) => {
       })),
     })
 
-    console.log(chalk.green(`✅ Group created: ${group.name}`))
+    console.log(chalk.green(` Group created: ${group.name}`))
     res.status(201).json(group)
   } catch (err) {
-    console.error(chalk.red("❌ Error creating group:"), err)
+    console.error(chalk.red(" Error creating group:"), err)
     res.status(500).json({ error: "Failed to create group" })
   }
 }
@@ -57,10 +57,10 @@ export const getUserGroups = async (req, res) => {
       },
     })
 
-    console.log(chalk.blue(`📦 Groups fetched for user ${user.id}`))
+    console.log(chalk.blue(` Groups fetched for user ${user.id}`))
     res.json(groups)
   } catch (err) {
-    console.error(chalk.red("❌ Error fetching groups:"), err)
+    console.error(chalk.red(" Error fetching groups:"), err)
     res.status(500).json({ error: "Failed to fetch groups" })
   }
 }
@@ -85,10 +85,10 @@ export const sendGroupMessage = async (req, res) => {
       },
     })
 
-    console.log(chalk.cyan(`💬 Message sent to group ${groupId}`))
+    console.log(chalk.cyan(` Message sent to group ${groupId}`))
     res.status(201).json(message)
   } catch (err) {
-    console.error(chalk.red("❌ Error sending group message:"), err)
+    console.error(chalk.red(" Error sending group message:"), err)
     res.status(500).json({ error: "Failed to send message" })
   }
 }
@@ -130,7 +130,7 @@ export const getEncryptedGroupKey = async (req, res) => {
       opkUsed: keyDelivery.opkHash,
     })
   } catch (err) {
-    console.error("❌ Error fetching encrypted group key:", err)
+    console.error(" Error fetching encrypted group key:", err)
     res.status(500).json({ error: "Failed to fetch group key" })
   }
 }

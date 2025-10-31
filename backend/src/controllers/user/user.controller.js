@@ -42,7 +42,7 @@ export const getPublicEncryptKey = async (req, res) => {
 
     res.status(200).json({ publicKey: user.publicKey })
   } catch (error) {
-    console.error("❌ Error fetching public key:", error)
+    console.error(" Error fetching public key:", error)
     res.status(500).json({ error: "Internal server error" })
   }
 }

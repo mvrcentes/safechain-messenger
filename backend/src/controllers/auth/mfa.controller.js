@@ -22,7 +22,7 @@ const extractUserFromToken = (req) => {
 export const getMFAStatus = async (req, res) => {
   const user = extractUserFromToken(req)
   if (!user) {
-    console.log(chalk.red("🔴 Unauthorized - Missing or invalid token"))
+    console.log(chalk.red(" Unauthorized - Missing or invalid token"))
     return res.status(401).json({ error: "Invalid or missing token" })
   }
 
@@ -33,11 +33,11 @@ export const getMFAStatus = async (req, res) => {
     })
 
     const isEnabled = !!dbUser?.mfaSecret
-    console.log(chalk.green(`✅ GET /mfa/status → MFA enabled: ${isEnabled}`))
+    console.log(chalk.green(` GET /mfa/status → MFA enabled: ${isEnabled}`))
 
     res.json({ mfaEnabled: isEnabled })
   } catch (err) {
-    console.error(chalk.red("❌ Error fetching MFA status:"), err)
+    console.error(chalk.red(" Error fetching MFA status:"), err)
     res.status(500).json({ error: "Failed to get MFA status" })
   }
 }
@@ -105,7 +105,7 @@ export const verifyAndEnableMFA = async (req, res) => {
 export const disableMFA = async (req, res) => {
   const user = extractUserFromToken(req)
   if (!user) {
-    console.log(chalk.red("🔴 Unauthorized - Cannot disable MFA"))
+    console.log(chalk.red(" Unauthorized - Cannot disable MFA"))
     return res.status(401).json({ error: "Invalid or missing token" })
   }
 
@@ -117,10 +117,10 @@ export const disableMFA = async (req, res) => {
       },
     })
 
-    console.log(chalk.yellow("⚠️ MFA disabled for user:"), user.email)
+    console.log(chalk.yellow(" MFA disabled for user:"), user.email)
     res.json({ message: "MFA disabled successfully" })
   } catch (err) {
-    console.error(chalk.red("❌ Error disabling MFA:"), err)
+    console.error(chalk.red(" Error disabling MFA:"), err)
     res.status(500).json({ error: "Failed to disable MFA" })
   }
 }

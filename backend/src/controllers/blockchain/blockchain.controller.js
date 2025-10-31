@@ -8,7 +8,7 @@ export async function createBlockchainEntry(messageId, messageContent) {
   const previousHash = lastBlock?.currentHash || 'GENESIS';
   const currentHash = calculateHash(messageContent, previousHash);
 
-  console.log("🔗 Nuevo bloque:", {
+  console.log(" Nuevo bloque:", {
     messageId,
     previousHash,
     currentHash
