@@ -1,0 +1,64 @@
+name: Frontend Dev Serve (PM2)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-dev-serve.yml"
+
+jobs:
+  dev-serve:
+    runs-on: [self-hosted, linux]   # mismo tipo de runner que usas para SonarQube
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps (no scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Install PM2 (global si existe sudo; si no, omite sudo)
+        run: |
+          if ! command -v pm2 >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1; then
+              sudo npm i -g pm2
+            else
+              npm i -g pm2
+            fi
+          fi
+          pm2 -v
+
+      - name: Kill previous Vite dev (if any)
+        run: pm2 delete vite-dev || true
+
+      - name: Start Vite dev (host 0.0.0.0, port from secret)
+        env:
+          HOST: 0.0.0.0
+          VITE_DEV_SERVER_PORT: ${{ secrets.VITE_DEV_SERVER_PORT }}   # <-- define este secret (ej. 8080)
+        run: |
+          pm2 start "npm run dev" --name vite-dev --cwd "$(pwd)" --time
+          pm2 save
+
+      - name: PM2 startup (persist after reboot)
+        run: |
+          STARTUP_CMD="$(pm2 startup systemd -u $USER --hp $HOME | tail -n 1 || true)"
+          if [ -n "$STARTUP_CMD" ]; then
+            echo "$STARTUP_CMD"
+            eval "$STARTUP_CMD" || true
+            pm2 save
+          fi
+
+      - name: Show PM2 processes
+        run: pm2 ls
