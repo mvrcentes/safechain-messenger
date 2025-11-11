@@ -10,7 +10,7 @@ on:
 
 jobs:
   dev-serve:
-    runs-on: [self-hosted, linux]   # mismo tipo de runner que usas para SonarQube
+    runs-on: [self-hosted, linux]
     defaults:
       run:
         working-directory: frontend
@@ -26,8 +26,17 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install deps (no scripts)
-        run: npm ci --ignore-scripts
+      - name: Install deps (prefer ci; fallback to install)
+        run: |
+          set -e
+          if [ -f package-lock.json ]; then
+            # intento estricto
+            if npm ci --ignore-scripts; then
+              exit 0
+            fi
+            echo "npm ci falló; usando npm install como fallback…" >&2
+          fi
+          npm install --ignore-scripts --no-audit --no-fund
 
       - name: Install PM2 (global si existe sudo; si no, omite sudo)
         run: |
@@ -46,7 +55,7 @@ jobs:
       - name: Start Vite dev (host 0.0.0.0, port from secret)
         env:
           HOST: 0.0.0.0
-          VITE_DEV_SERVER_PORT: ${{ secrets.VITE_DEV_SERVER_PORT }}   # <-- define este secret (ej. 8080)
+          VITE_DEV_SERVER_PORT: ${{ secrets.VITE_DEV_SERVER_PORT }}
         run: |
           pm2 start "npm run dev" --name vite-dev --cwd "$(pwd)" --time
           pm2 save
